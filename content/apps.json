@@ -5,6 +5,16 @@
   ],
   "items": [
     {
+      "slug": "purrdict",
+      "kind": "play",
+      "title": "Purrdict · 猫咪法官",
+      "summary": "让猫咪法官为两个人的争论出出主意。",
+      "tags": ["AI", "互动体验"],
+      "story": "我做的一个带点幽默感的互动小程序：把争论交给猫咪法官，看看它会怎么说。",
+      "audience": "适合想轻松体验这个小程序的人。",
+      "url": "https://purrdict.ai.studio/"
+    },
+    {
       "slug": "maths-apps",
       "kind": "learn",
       "title": "数学小程序",

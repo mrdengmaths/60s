@@ -1,7 +1,7 @@
 ---
 draft: true
-title: 示例随想：一件小事
-date: 2026-09-30
+title: 示例随想（草稿未发布）
+date: 2026-09
 topic: daily
 summary: 写一件具体的小事，以及它让你想到了什么。
 ---
