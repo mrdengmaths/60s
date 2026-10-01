@@ -1,0 +1,28 @@
+{
+  "categories": [
+    {"id": "board-games", "label": "桌游", "blurb": "适合什么场合、几个人玩？我会把这些实际体验也一起写上。"},
+    {"id": "travel", "label": "旅游景点", "blurb": "值得专程去，还是刚好路过？我想记下让一个地方变特别的细节。"},
+    {"id": "experiences", "label": "体验", "blurb": "一堂课、一场演出、一段旅程，或任何让我想再来一次的经历。"},
+    {"id": "misc", "label": "其他好物", "blurb": "不属于以上几类，但我确实反复用、反复推荐的东西。"}
+  ],
+  "items": [
+    {
+      "draft": true,
+      "category": "board-games",
+      "title": "示例：桌游的名字",
+      "story": "这是一条示例。写下你和谁、在什么情境下玩到它，以及为什么会推荐——要有你自己的视角，而不是攻略。",
+      "for": "3–4 人 · 朋友聚会",
+      "rating": 4,
+      "link": {"label": "了解更多", "url": "https://example.com"}
+    },
+    {
+      "draft": true,
+      "category": "travel",
+      "title": "示例：一个地方",
+      "story": "这是一条示例。写下那个地方让你难忘的细节：是哪个时间、哪个角落，还是当时身边的人。",
+      "for": "慢慢逛的人 · 半天",
+      "rating": 5,
+      "link": {"label": "在地图中查看", "url": "https://example.com"}
+    }
+  ]
+}

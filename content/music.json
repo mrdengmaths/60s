@@ -1,0 +1,27 @@
+{
+  "intro": "喜欢的歌通常不需要理由，但我愿意试着讲讲它们为什么留下来。",
+  "pages": {
+    "favorites": {"title": "红心歌单", "blurb": "我常听、舍不得删的歌，每首配一句话。"},
+    "reviews": {"title": "乐评 · 专辑介绍", "blurb": "聊聊某张专辑或某首歌：我听它时的状态、记忆和心情。"}
+  },
+  "nowPlaying": {
+    "draft": true,
+    "title": "示例歌曲",
+    "artist": "示例歌手",
+    "url": "https://y.qq.com/",
+    "updated": "2026-09-30"
+  },
+  "playlist": {
+    "title": "我的红心歌单",
+    "url": ""
+  },
+  "songs": [
+    {
+      "draft": true,
+      "title": "示例歌曲",
+      "artist": "示例歌手",
+      "note": "用一句话写下这首歌给你的感受。",
+      "url": "https://y.qq.com/"
+    }
+  ]
+}

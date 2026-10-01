@@ -1,7 +1,4 @@
 {
-  "name": "Copy of GemBooth",
-  "description": "Try native image model effects with your webcam.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "name": "Frederick Deng",
+  "description": "Frederick Deng 的个人网站：小程序、推荐、音乐与随想。"
 }

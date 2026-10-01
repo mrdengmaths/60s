@@ -1,0 +1,24 @@
+{
+  "name": "Frederick Deng",
+  "startYear": 2026,
+  "description": "Frederick Deng 的个人网站：小程序、推荐、音乐与随想。",
+  "tagline": {
+    "zh": "数学老师。做一点小程序，记一点喜欢的事，也慢慢写下那些没有标准答案的问题。",
+    "en": "Math teacher. I build small apps, keep track of things I love, and write about questions with no single right answer."
+  },
+  "photo": "",
+  "contact": [
+    {"label": "GitHub", "url": "https://github.com/mrdengmaths"}
+  ],
+  "friends": [
+    {"draft": true, "name": "示例：朋友的名字", "url": "https://example.com", "note": "example.com"}
+  ],
+  "sections": {
+    "home": {"label": "首页", "en": "Home"},
+    "apps": {"label": "小程序", "en": "Apps", "blurb": "我做的小东西：学习工具和小游戏，边玩边打磨。"},
+    "picks": {"label": "推荐", "en": "Picks", "blurb": "不求多，只写我真心喜欢的。"},
+    "music": {"label": "音乐", "en": "Music", "blurb": "红心歌单，和我想聊聊的专辑。"},
+    "thoughts": {"label": "随想", "en": "Thoughts", "blurb": "一些还没想明白的问题。"},
+    "about": {"label": "关于我", "en": "About"}
+  }
+}

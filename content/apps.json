@@ -1,0 +1,38 @@
+{
+  "kinds": [
+    {"id": "learn", "label": "学习工具"},
+    {"id": "play", "label": "娱乐小游戏"}
+  ],
+  "items": [
+    {
+      "slug": "maths-apps",
+      "kind": "learn",
+      "title": "数学小程序",
+      "summary": "把课堂里的概念，变成可以动手试试的东西。",
+      "tags": ["学习"],
+      "story": "课堂上讲过的概念，读一遍不如亲手试一次。我想把它们做成可以点一点、拖一拖、反复试错的小工具。",
+      "audience": "适合正在学数学的学生，也适合想换个方式回顾概念的人。",
+      "url": "https://mrdengmaths.github.io/barkermaths/app/"
+    },
+    {
+      "slug": "maths-room",
+      "kind": "play",
+      "title": "The Maths Room",
+      "summary": "在熟悉的教室里探索、接任务、解数学谜题。",
+      "tags": ["游戏原型"],
+      "story": "数学题不一定要坐在桌前做。这个原型把熟悉的教室变成一张可以走动的地图，任务和谜题藏在里面，要靠数学来解开。",
+      "audience": "适合喜欢解谜的学生，也适合想看看“数学 + 游戏”能做成什么样子的人。目前还是原型。",
+      "url": "https://mrdengmaths.github.io/barkermaths/app/virtual-classroom/"
+    },
+    {
+      "slug": "geometry",
+      "kind": "learn",
+      "title": "几何与图形",
+      "summary": "关于角、图形和空间关系的一组互动工具。",
+      "tags": ["数学实验"],
+      "story": "角、图形和空间关系，很难只靠黑板讲明白。我做了一组互动工具，让学生自己动手摆弄、观察。",
+      "audience": "适合正在学几何的学生，也适合想直观理解图形的人。",
+      "url": "https://mrdengmaths.github.io/barkermaths/app/geometry-app/"
+    }
+  ]
+}
