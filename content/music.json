@@ -1,26 +1,33 @@
 {
-  "intro": "喜欢的歌通常不需要理由，但我愿意试着讲讲它们为什么留下来。",
-  "pages": {
-    "favorites": {"title": "红心歌单", "blurb": "我常听、舍不得删的歌，每首配一句话。"},
-    "reviews": {"title": "乐评 · 专辑介绍", "blurb": "聊聊某张专辑或某首歌：我听它时的状态、记忆和心情。"}
-  },
+  "intro": "讲讲我喜欢的歌、专辑和歌手。",
   "nowPlaying": {
-    "draft": true,
-    "title": "示例歌曲",
-    "artist": "示例歌手",
-    "url": "https://y.qq.com/",
+    "title": "瓦尔登湖",
+    "artist": "周云蓬",
+    "url": "https://open.spotify.com/track/2HXJvyifelMbr1rlnx3zok",
     "updated": "2026-09-30"
   },
   "playlist": {
     "title": "我的红心歌单",
-    "url": ""
+    "url": "https://i2.y.qq.com/n3/other/pages/details/playlist.html?id=2862128843"
   },
   "songs": [
     {
-      "title": "示例歌曲",
-      "artist": "示例歌手",
-      "note": "用一句话写下这首歌给你的感受。",
-      "url": "https://y.qq.com/"
+      "title": "老式双卡录音机",
+      "artist": "还潮",
+      "year": "2019",
+      "note": "熊猫牌双卡录音机，就是回忆里的童年",
+      "tags": ["宁波话", "民谣", "怀旧"],
+      "url": "https://open.spotify.com/track/0nFSEssu2KXFSPWCYZUqo0",
+      "embed": "https://open.spotify.com/embed/track/0nFSEssu2KXFSPWCYZUqo0"
+    },
+    {
+      "title": "津軽海峡・冬景色",
+      "artist": "石川小百合",
+      "year": "1977",
+      "note": "再见爱人",
+      "tags": ["日语", "演歌"],
+      "url": "https://open.spotify.com/track/7ddxw8eajVM8PlrbxYn8cM",
+      "embed": "https://open.spotify.com/embed/track/7ddxw8eajVM8PlrbxYn8cM"
     }
   ]
 }
