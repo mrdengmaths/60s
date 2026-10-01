@@ -1,10 +1,10 @@
 {
-  "name": "Frederick Deng",
+  "name": "邓景文",
   "startYear": 2026,
-  "description": "Frederick Deng 的个人网站：小程序、推荐、音乐与随想。",
+  "description": "景文的个人网站：小程序、推荐、音乐与随想。",
   "tagline": {
-    "zh": "数学老师。做一点小程序，记一点喜欢的事，也慢慢写下那些没有标准答案的问题。",
-    "en": "Math teacher. I build small apps, keep track of things I love, and write about questions with no single right answer."
+    "zh": "这个网站记录那些让我沉迷，但也令我感到广阔的碎片。",
+    "en": "This site records the things that captivate me and also make me feel vast."
   },
   "photo": "",
   "contact": [
