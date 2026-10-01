@@ -6,13 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && vite build --ssr src/entry-server.jsx --outDir dist-ssr && node scripts/prerender.mjs",
-    "preview": "vite preview"
-  },
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "preview": "vite preview",
     "deploy": "cross-env BASE_PATH=/60s/ npm run build && gh-pages -d dist"
-},
+  },
   "dependencies": {
     "react": "latest",
     "react-dom": "latest",
