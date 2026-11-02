@@ -59,6 +59,7 @@ const CONFIG = {
   DREAM_FADE_MS: 350,
   LINE_GAP_MS: 2200,               // pause between Haile's lines in the dream and end scenes (milliseconds)
   STAR_HOLD_MS: 5500,              // how long the new star shines before the dream fades away
+  WHITE_HOLD_MS: 600,              // how long the screen stays white after the dream (shorter than the music fade)
   MUSIC_FADE_S: 7,                 // seconds for the dream music to fade out (keeps fading after the screen is white)
   BG_VOLUME: 0.55,                 // loudness of the dream/end music (1 = old level, smaller = quieter)              // speed of the slow fades before/after the dream (bigger = slower)
   MUSIC: true,                     // soft background tune (press M in game to mute)
@@ -1183,8 +1184,8 @@ const CUTS = {
     G.cut.star = G.cut.t; await sleep(CONFIG.STAR_HOLD_MS);                      // a new star appears and shines (held longer)
     stopBG(CONFIG.MUSIC_FADE_S);                                               // music slowly gets quieter...
     await fadeOut(0, CONFIG.DREAM_FADE_MS + 100);                              // ...while the screen fades to white
-    await sleep(Math.max(1200, CONFIG.MUSIC_FADE_S * 1000 - fadeSec(CONFIG.DREAM_FADE_MS + 100) * 1000));   // wait until the music is silent
-    musicPaused = false;
+    await sleep(CONFIG.WHITE_HOLD_MS);                                         // short white screen (music is still fading out)
+    setTimeout(() => { musicPaused = false; }, CONFIG.MUSIC_FADE_S * 1000);    // normal tune only returns after the dream music is silent
     G.flags = {}; G.busy = false;
     await loadScene('bedroom', 'wake', CONFIG.DREAM_FADE_MS);                  // wake up in bed, slow fade in
   },
@@ -1214,11 +1215,11 @@ const STARS = Array.from({ length: 46 }, (_, i) => { const h = n => { const v = 
   return [Math.floor(h(1) * 158), Math.floor(h(2) * 132), i % 5]; });
 const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
 function drawNightSky(t, c, pan) {   // the sky above the dream meadow; screen rows 0 .. pan. Gets darker the higher you look.
-  for (let y = 0; y < pan; y++) { const d = pan - y, v = Math.min(3, 1 + d / 40 + (c.night || 0) * 3);   // 1 (just above meadow) -> 3 (deep sky)
+  for (let y = 0; y < pan; y++) { const d = pan - y, v = Math.min(3, 1 + d / 72 + (c.night || 0) * 3);   // d = height above the meadow: the whole sky (light -> dark) is one tall picture that scrolls down with the camera
     const lo = Math.floor(v), frac = v - lo;
-    for (let x = 0; x < W; x++) R(ctx, x, y, 1, 1, lo < 3 && frac * 16 > BAYER[y & 3][x & 3] ? lo + 1 : lo); }
-  for (const [x, y, k] of STARS) { const sy = y - 144 + pan; if (sy < 0) continue; const d = pan - sy + (c.night || 0) * 120; if (d < 50) continue;
-    const tw = ((t >> 4) + k) % 5 === 0, fade = d < 70;   // stars fade in as the sky darkens
+    for (let x = 0; x < W; x++) R(ctx, x, y, 1, 1, lo < 3 && frac * 16 > BAYER[d & 3][x & 3] ? lo + 1 : lo); }   // dither moves with the sky too
+  for (const [x, y, k] of STARS) { const sy = y - 144 + pan; if (sy < 0) continue; const d = pan - sy + (c.night || 0) * 144; if (d < 60) continue;
+    const tw = ((t >> 4) + k) % 5 === 0, fade = d < 90;   // stars fade in as the sky darkens
     R(ctx, x, sy, 1, 1, tw || fade ? 1 : k < 2 ? 0 : 2); if (k === 0 && !tw && !fade) { R(ctx, x - 1, sy, 3, 1, 2); R(ctx, x, sy - 1, 1, 3, 2); R(ctx, x, sy, 1, 1, 0); } }
   if (c.star != null) { const k = t - c.star, sx = 104, sy = 46;   // the new star: a spark that grows, flashes, then twinkles
     const r = k < 40 ? Math.round(k / 8) : k < 70 ? 5 + ((k >> 2) & 1) * 3 : 4 + ((k >> 4) & 1);
