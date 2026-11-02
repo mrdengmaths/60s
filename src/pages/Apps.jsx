@@ -1,8 +1,9 @@
-import {useParams} from 'react-router'
+﻿import {useParams} from 'react-router'
 import {Layout} from '../components/Layout.jsx'
 import {BackLink, ExternalMark, Item, Tag} from '../components/parts.jsx'
 import {appKinds, apps, live, sections} from '../content.js'
 import {useMeta} from '../lib/meta.js'
+import {asset} from '../lib/paths.js'
 import NotFound from './NotFound.jsx'
 
 export function Apps() {
@@ -74,7 +75,7 @@ function AppPage({app}) {
           {app.embed !== false && (
             <div className="embed">
               <iframe
-                src={app.url}
+                src={asset(app.url)}
                 title={`${app.title} 运行区域`}
                 loading="lazy"
                 allow="fullscreen"
@@ -83,7 +84,7 @@ function AppPage({app}) {
             </div>
           )}
           <p className="links">
-            <a href={app.url} target="_blank" rel="noopener noreferrer">在新窗口打开<ExternalMark /></a>
+            <a href={asset(app.url)} target="_blank" rel="noopener noreferrer">在新窗口打开<ExternalMark /></a>
             {app.source && <a href={app.source} target="_blank" rel="noopener noreferrer">查看源码<ExternalMark /></a>}
           </p>
         </section>
@@ -91,3 +92,4 @@ function AppPage({app}) {
     </Layout>
   )
 }
+
