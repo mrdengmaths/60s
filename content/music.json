@@ -1,11 +1,5 @@
 {
   "intro": "我的红心歌单，点击播放键试听歌曲",
-  //"nowPlaying": {
-  //  "title": "瓦尔登湖",
-  //  "artist": "周云蓬",
-  //  "url": "https://open.spotify.com/track/2HXJvyifelMbr1rlnx3zok",
-  //  "updated": "2026-09-30"
-  //},
   "playlist": {
     "title": "我的红心歌单",
     "url": "https://i2.y.qq.com/n3/other/pages/details/playlist.html?id=2862128843&hosteuin="
