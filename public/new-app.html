@@ -1,11 +1,1415 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>新小程序</title>
-</head>
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Haile</title>
+<style>
+html,body{margin:0;height:100%;background:#0b1410;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace}
+#ov{position:fixed;pointer-events:none;z-index:2;image-rendering:pixelated}
+#c{image-rendering:pixelated;image-rendering:crisp-edges;display:block;border:4px solid #071821;box-shadow:0 0 0 2px #306850}
+#pad{display:none;width:100%;max-width:480px;height:180px;position:relative;margin-top:10px}
+body.touch #pad{display:block}
+#pad button{position:absolute;background:#306850;color:#e0f8cf;border:3px solid #071821;font:bold 18px monospace;touch-action:none;-webkit-tap-highlight-color:transparent}
+#pad button:active{background:#86c06c}
+.u,.d,.l,.r{width:54px;height:54px;border-radius:6px}
+.u{left:70px;top:8px}.d{left:70px;top:116px}.l{left:16px;top:62px}.r{left:124px;top:62px}
+.a,.b{width:66px;height:66px;border-radius:50%}
+.a{right:18px;top:30px}.b{right:96px;top:72px}
+.st{left:50%;transform:translateX(-50%);bottom:0;width:84px;height:28px;border-radius:14px;font-size:12px!important}
+/* phone held sideways: D-pad on the left edge, A/B/Start on the right edge, game fills the middle */
+body.touch.land{flex-direction:row}
+body.touch.land #pad{position:fixed;inset:0;width:auto;max-width:none;height:auto;margin:0;pointer-events:none}
+body.touch.land #pad button{pointer-events:auto}
+body.touch.land .u{left:62px;top:calc(50% - 85px)} body.touch.land .d{left:62px;top:calc(50% + 31px)}
+body.touch.land .l{left:8px;top:calc(50% - 27px)} body.touch.land .r{left:116px;top:calc(50% - 27px)}
+body.touch.land .a{right:14px;left:auto;top:calc(50% - 70px)} body.touch.land .b{right:92px;left:auto;top:calc(50% - 16px)}
+body.touch.land .st{left:auto;right:30px;transform:none;bottom:14px}
+</style></head>
 <body>
-  <!-- 把代码粘贴到这里 -->
-</body>
-</html>
+<canvas id="c" width="160" height="144"></canvas>
+<canvas id="ov" width="640" height="576"></canvas>
+<div id="pad">
+  <button class="u" data-k="up">&#9650;</button><button class="d" data-k="down">&#9660;</button>
+  <button class="l" data-k="left">&#9664;</button><button class="r" data-k="right">&#9654;</button>
+  <button class="b" data-k="B">B</button><button class="a" data-k="A">A</button>
+  <button class="st" data-k="start">START</button>
+</div>
+<script>
+'use strict';
+/* =====================================================================
+   HAILE  -  a Game Boy-style memorial game
+   ---------------------------------------------------------------------
+   HOW TO EDIT (no programming needed):
+   * All words in the game live in DIALOGUE (just below). Change the
+     text between the quote marks. Keep the quote marks and commas.
+   * Lines marked  // PLACEHOLDER  are ones Fred asked to rewrite.
+   * Press C while playing to see the collision grid (red = wall),
+     doors (blue), things you can talk to (yellow) and your tile x,y.
+   * Collision grids: '#' = wall / furniture, '.' = floor.
+     Each character is one 8x8 tile. Row 0 is the top row.
+   ===================================================================== */
+
+/* ---------------- 1. SETTINGS ---------------- */
+const CONFIG = {
+  DEBUG: false,                    // true = show the debug overlay from the start (C toggles it)
+  ENABLE_PUZZLE_MINIGAME: false,   // true = Max's 12-ball balance-scale puzzle after his lines
+  HIDE_ON_DAY2: ['haile', 'xiaoyi', 'max', 'daidai', 'yang'], // who is absent on Day 2
+  STREET_SPEED: 2,                 // walk scene: Fred moves 1 pixel every N frames (bigger = slower)
+  TEXT_SPEED: 2,                   // frames per letter (bigger = slower typing)
+  DREAM_FADE_MS: 350,
+  LINE_GAP_MS: 2200,               // pause between Haile's lines in the dream and end scenes (milliseconds)
+  STAR_HOLD_MS: 5500,              // how long the new star shines before the dream fades away
+  MUSIC_FADE_S: 7,                 // seconds for the dream music to fade out (keeps fading after the screen is white)
+  BG_VOLUME: 0.55,                 // loudness of the dream/end music (1 = old level, smaller = quieter)              // speed of the slow fades before/after the dream (bigger = slower)
+  MUSIC: true,                     // soft background tune (press M in game to mute)
+};
+
+/* ---------------- 2. ALL TEXT ---------------- */
+let LANG = 'en';     // chosen on the first screen: 'en' or 'zh'
+/* Each language has its own set of words. English = DIALOGUES.en, Chinese = DIALOGUES.zh */
+const DIALOGUES = {
+  en: {
+  title: "HAILE", pressStart: "Press Start", langPick: "Choose language",
+
+  intro: ["It's a sunny Sunday morning", "Fred is taking Daidai to Xiaoyi's place"],
+
+  // Living Room - Day 1 (Haile is still here)
+  haileLines: [["Haile: Sniff Sniff"], ["Haile: I like all veggies"], "PAT"],   // Haile's lines take turns in this order ("PAT" = the pat question)
+  hailePat: "Pat him?",
+  hailePatYes: ["(You pat Haile. His tail wags.)"],          // PLACEHOLDER
+  yes: "Yes", no: "No",
+  xiaoyi: ["Xiaoyi: Haile is not feeling well", "Xiaoyi: He's an old dog now"],
+  maxAsk: "Max: Fixing this TV... I've got a puzzle for you!",
+  maxYesPlease: "Yes please", maxNoThanks: "No thanks",
+  maxYes: ["Max: You have 12 balls identical in size and appearance but 1 is an odd weight",
+           "Max: You have only 3 chances to weigh the balls...",
+           "Max: Find which ball is the odd one",
+           "Max: I think it's really tricky"],
+  maxNo: ["Max: Ok, maybe next time"],
+  tv1: ["The TV is playing Xi You Ji - Journey to the West."],
+  sofa1: ["The blanket smells like Haile."],
+  water1: "Haile's water bowl.", waterAsk: "Top it up?", waterYes: ["(You top it up.)"],
+  food1: ["Haile eats everything here. He really does like all his veggies.", "You added some white rice."],
+  wine1: ["Fred: Yijun made this Aperol Spritz", "Fred: Not bad."],
+  stove: ["Fred: Xiaoyi's cast iron pan is so cool..."],
+  leash1: ["Haile's leash."],
+  leashAsk: "(Take Haile for a walk?)",
+  leashNo: ["Maybe later."],
+
+  // Bedroom / Toilet
+  bedAsk: "(Go to sleep?)",
+  pianoAsk: "Demonstrate for Xiao Yi?",
+    pianoMary: ["Xiaoyi: I feel personally attacked right now."],
+  pianoAsk2: "Play the piano?",
+  pianoDay2: ["Fred: This was Haile's favourite song by Eason.", "\"On the moon\""],
+  toilet1: ["Fred: I'm gonna take a dump. Better let everyone know."],
+  washAsk: "Wash your hands?", washYes: ["(Squeaky clean.)"],
+  toilet: ["A small, quiet room. The tap drips, slow and steady."],   // Day 2
+
+  // Living Room - Day 2 (after Haile has passed away)
+  tv2: ["Haile used to love napping next to TV."],
+  sofa2: ["Haile's spot", "He loved curling up on this purple blanket"],
+  water2: ["Haile always drank loudly and left a puddle here.", "The floor is dry now. Light falls across it."],
+  food2: ["Haile ate everything here. He really did like all his veggies.", "An empty corner, clean and calm."],
+  leash2: ["Daidai had lots of fun walking Haile."],
+
+  // Yard
+  yardHaile: ["Haile: Eating grass", "Haile: Cough cough"],
+  daidai: ["Daidai: Pi gu!"],
+  yang: ["Yijun: Da Pi gu!"],
+  thrower1: ["Fred: Better not pick it up", "Fred: Or Haile gets too excited for the tennis ball"],
+  thrower2: ["No more torn up tennis balls."],
+  gateAsk: "Fred: It's time to go home.",
+
+  // Thornley Street
+  poo: ["Haile stops and squats...", "Haile has done his business!"],
+  pooPick: "Pick it up (with bag)",
+  pooDone: ["Fred carefully picks it up. Good boy, both of them."],
+  streetPee: ["Haile peed at every lamppost."],     // shown after the 2nd lamppost
+    streetEnd: ["Time to head home."],                 // shown at the end of the street
+
+  // Cutscenes
+  dream: ["Haile: Thank you for playing with me", "Haile: I've had a great gou sheng (dog life)", "Haile: But it's time to say goodbye"],
+  end: ["Fred: Goodbye Haile!"],
+},
+  zh: {
+  title: "HAILE", pressStart: "按 START 开始", langPick: "选择语言",
+  intro: ["一个阳光明媚的周日早晨", "健健带着呆呆去小姨家"],
+  // 客厅 - 第一天
+  haileLines: [["Haile：嗅嗅嗅"], ["Haile：什么菜我都爱吃"], "PAT"],   // Haile 的台词轮流出现（"PAT" = 是否摸摸他）
+  hailePat: "摸摸他？",
+  hailePatYes: ["（你摸了摸 Haile，他摇起了尾巴。）"],
+  yes: "是", no: "否",
+  xiaoyi: ["小姨：Haile 身体不太舒服", "小姨：他已经是条老狗了"],
+  maxAsk: "马克思：我在安装电视。我有道谜题给你！",
+  maxYesPlease: "好啊", maxNoThanks: "不用了",
+  maxYes: ["马克思：有 12 个大小外观都一样的球，其中 1 个重量不同",
+           "马克思：你只能称 3 次。",
+           "马克思：找出那个与众不同的球",
+           "马克思：我觉得这题真的很难"],
+  maxNo: ["马克思：好吧，下次再说"],
+  tv1: ["电视在放《西游记》。"],
+  sofa1: ["毯子上有 Haile 的味道。"],
+  water1: "Haile 的水碗。", waterAsk: "加点水？", waterYes: ["（你把水加满了。）"],
+  food1: ["Haile 什么都吃，特别爱吃菜。", "你加了些白米饭。"],
+  wine1: ["健健：这杯鸡尾酒是洋调的", "健健：还不错。"],
+  stove: ["健健：小姨的铸铁锅真好啊"],
+  leash1: ["Haile 的牵引绳。"],
+  leashAsk: "（带 Haile 去散步？）",
+  leashNo: ["等会儿吧。"],
+  // 卧室 / 洗手间
+  bedAsk: "（去睡觉？）",
+  pianoAsk: "给小姨示范一下？",
+  pianoMary: ["小姨：你又在羞辱我"],
+  pianoAsk2: "弹一下钢琴？",
+  pianoDay2: ["健健：这是 Haile 最喜欢的陈奕迅的歌。", "《月球上的人》"],
+  toilet1: ["健健：我要拉屎了", "健健：得告诉大家"],
+  washAsk: "洗手吗？", washYes: ["（洗得干干净净。）"],
+  toilet: ["小小的、安静的房间。水龙头慢慢地滴着水。"],   // 第二天
+  // 客厅 - 第二天
+  tv2: ["Haile 以前最爱在电视旁边打盹。"],
+  sofa2: ["Haile 的位置", "他最爱蜷在这条紫色毯子上"],
+  water2: ["Haile 以前喝水总是很大声，还会洒一地。", "现在地板是干的，阳光洒在上面。"],
+  food2: ["Haile 什么都吃，特别爱吃菜。", "角落空了，干净又安宁。"],
+  leash2: ["呆呆遛 Haile 的时候玩得可开心了。"],
+  // 花园
+  yardHaile: ["Haile：我爱吃草", "Haile：咳嗽、咳嗽"],
+  daidai: ["呆呆：屁股！"],
+  yang: ["洋：大屁股！"],
+  thrower1: ["健健：最好别拿起来", "健健：不然 Haile 看到网球会太兴奋"],
+  thrower2: ["再也没有被咬烂的网球了。"],
+  gateAsk: "健健：该回家了。",
+  // Thornley 街
+  poo: ["Haile 停下来蹲着。", "Haile 拉完了！"],
+  pooPick: "捡起来（用袋子）",
+  pooDone: ["健健小心地捡了起来。两个都是好孩子。"],
+  streetPee: ["Haile 在每根灯柱下都撒了尿。"],
+  streetEnd: ["该回家了。"],
+  // 过场
+  dream: ["Haile：谢谢你陪我玩", "Haile：我度过了很棒的狗生", "Haile：但现在该说再见了"],
+  end: ["健健：再见，Haile！"],
+  },
+};
+let DIALOGUE = DIALOGUES.en;
+
+/* ---------------- 3. MAPS, COLLISION, PEOPLE, OBJECTS ----------------
+   Positions are in TILES (1 tile = 8 pixels) unless marked px.
+   spawn: [tileX, tileY, facing]  (Fred's feet are placed on that tile)
+   hotspots: rectangles of tiles you can press A on: {x,y,w,h,id}
+   doors:    rectangles you walk into:               {x,y,w,h,go,spawn}
+------------------------------------------------------------------------ */
+const SCENES = {
+  livingroom: {
+    image: 'livingroom', w: 28, h: 18,
+    grid: [
+      '############################', // 0
+      '############################', // 1  back wall
+      '############################', // 2
+      '############################', // 3
+      '############################', // 4
+      '############################', // 5
+      '############################', // 6
+      '#.##.##.####...............#', // 7  desk with leash, lamp, sofa
+      '#.##.##....................#', // 8
+      '...........................#', // 9  left opening -> yard
+      '...................####.....', // 10 top-right opening -> bedroom
+      '#.................######....', // 11 dining table
+      '#.................######...#', // 12
+      '#......######.....######...#', // 13 TV unit
+      '#.####.######......####....#', // 14 bowls
+      '#.####.######...............', // 15 bottom-right opening -> toilet
+      '#...........................', // 16
+      '############################', // 17
+    ],
+    spawns: { start: [14, 9, 'down'], fromYard: [2, 9, 'right'], fromBedroom: [25, 10, 'left'],
+              fromToilet: [25, 15, 'left'], fromStreet: [2, 9, 'right'] },
+    doors: [ { x: 0, y: 9, w: 1, h: 2, go: 'yard', spawn: 'fromLiving' },
+             { x: 27, y: 10, w: 1, h: 2, go: 'bedroom', spawn: 'fromLiving' },   // top-right opening
+             { x: 27, y: 15, w: 1, h: 2, go: 'toilet', spawn: 'fromLiving' } ], // bottom-right opening
+    hotspots: [ { x: 7, y: 13, w: 6, h: 3, id: 'tv' }, { x: 8, y: 6, w: 4, h: 2, id: 'sofa' },
+                { x: 4, y: 14, w: 2, h: 2, id: 'water' }, { x: 2, y: 14, w: 2, h: 2, id: 'food' },
+                { x: 1, y: 5, w: 1, h: 4, id: 'leash' }, { x: 2, y: 7, w: 2, h: 2, id: 'leash' },  // wall hook + desk by the lamp
+                { x: 18, y: 10, w: 6, h: 5, id: 'wine', day: 1, near: true },   // dining table + cocktail (Day 1), from any side
+                { x: 16, y: 5, w: 3, h: 2, id: 'stove', day: 1 } ],   // Day 1 only                      // kitchen stove                      // wine glass on the dining table (Day 1 only)
+    // things drawn on top of your map: [sprite, px x, px y, 1 = Day 1 only]
+    decor: [ ['leash', 8, 38, 1], ['foodbowl', 17, 116, 1] ],
+    // On Day 2 the water bowl, the desk leash and the wine glass are painted over
+    actors: [ { id: 'haile', kind: 'haile', x: 16, y: 12, wander: [1, 8, 26, 16] },
+              { id: 'xiaoyi', kind: 'person', look: 'xiaoyi', x: 17, y: 12, dir: 'right' },
+              { id: 'max', kind: 'person', look: 'max', x: 9.5, y: 12, dir: 'down' } ],
+  },
+  bedroom: {
+    image: 'bedroom', w: 18, h: 18,
+    grid: [
+      '##################', // 0
+      '##################', // 1
+      '##################', // 2
+      '##################', // 3
+      '##################', // 4
+      '######..####...###', // 5  bed, piano, shelf
+      '######..####...###', // 6
+      '######...##....###', // 7
+      '#..............###', // 8
+      '#..............###', // 9
+      '#..............###', // 10
+      '###............###', // 11
+      '###............###', // 12
+      '...............###', // 13 door (left) -> living room
+      '.............#####', // 14
+      '#............#####', // 15 plants
+      '#............#####', // 16
+      '##################', // 17
+    ],
+    spawns: { fromLiving: [1, 13, 'right'], wake: [3, 9, 'down'] },
+    doors: [ { x: 0, y: 13, w: 1, h: 2, go: 'livingroom', spawn: 'fromBedroom' } ],
+    hotspots: [ { x: 1, y: 4, w: 5, h: 4, id: 'bed' }, { x: 8, y: 4, w: 4, h: 4, id: 'piano' } ],
+    decor: [], actors: [],
+  },
+  toilet: {
+    image: 'toilet', w: 16, h: 9,
+    grid: [
+      '################', // 0
+      '################', // 1
+      '################', // 2
+      '################', // 3
+      '########.#######', // 4
+      '#.....##.....###', // 5
+      '.............###', // 6 door (left) -> living room
+      '...............#', // 7
+      '################', // 8
+    ],
+    spawns: { fromLiving: [1, 7, 'right'] },
+    doors: [ { x: 0, y: 6, w: 1, h: 2, go: 'livingroom', spawn: 'fromToilet' } ],
+    hotspots: [ { x: 9, y: 3, w: 2, h: 2, id: 'toilet' } ],
+    sink: { x: 5, y: 5, w: 4, h: 2 },   // walking past here after the toilet asks to wash hands
+    decor: [], actors: [],
+  },
+  yard: {
+    // Drawn in code. Letters: W house wall, G glass door, d decking, g grass, b brick,
+    // e garden bed, f fence, T table+chairs, L big leaves, P ball thrower
+    draw: 'yard', w: 32, h: 32, solid: 'WGfbeTLP',
+    map: [
+      'WWWWWWWWWWWWWWGGGGWWWWWWWWWWWWWW', // 0  house
+      'WWWWWWWWWWWWWWGGGGWWWWWWWWWWWWWW', // 1
+      'WWWWWWWWWWWWWWGGGGWWWWWWWWWWWWWW', // 2
+      'WWWWWWWWWWWWWWddddWWWWWWWWWWWWWW', // 3  glass sliding door
+      'fddddddddddddddddddddddddddddddf', // 4  decking
+      'fdddTTTTTTdddddddddddddddddddddf', // 5
+      'fdddTTTTTTdddddddddddddddddddddf', // 6  outdoor dining table
+      'fdddTTTTTTdddddddddddddddddddddf', // 7
+      'fdddTTTTTTdddddddddddddddddddddf', // 8
+      'fdddTTTTTTdddddddddddddddddddddf', // 9
+      'fddddddddddddddddddddddddddddddf', // 10
+      'fddddddddddddddddddddddddddddddf', // 11
+      'fdddddddddddddddddddddPddddddddf', // 12 ball thrower
+      'fddddddddddddddddddddddddddddddf', // 13
+      'fddddddddddddddddddddddddddddddf', // 14
+      'fggggggggggggggggggggggggggggggf', // 15 lawn
+      'fggggggggggggggggggggggggggggggf', // 16
+      'fggggggggggggggggggggggggggggggf', // 17
+      'fggggggggggggggggggggggggggggggf', // 18
+      'fggggggggggggggggggggggggggggggf', // 19
+      'fgggggggggggggggggggggggggLLLLLf', // 20 bird of paradise
+      'fggggggggggggggggggggggggLLLLLLf', // 21
+      'fggggggggggggggggggggggggLLLLLLf', // 22
+      'fggggggggggggggggggggggggLLLLLLf', // 23
+      'fggggggggggggggggggggggggLLLLLLf', // 24
+      'fggggggggggggggggggggggggLLLLLLf', // 25
+      'fggggggggggggggggggggggggLLLLLLf', // 26
+      'fbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbf', // 27 brick border
+      'fbeeeeeeeeeeeeeeeeeeeeeeeeeeeebf', // 28 garden bed
+      'fbeeeeeeeeeeeeeeeeeeeeeeeeeeeebf', // 29
+      'fbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbf', // 30
+      'ffffffffffffffffffffffffffffffff', // 31
+    ],
+    spawns: { fromLiving: [15, 5, 'down'] },
+    doors: [ { x: 14, y: 3, w: 4, h: 1, go: 'livingroom', spawn: 'fromYard' } ],
+    hotspots: [ { x: 22, y: 11, w: 1, h: 2, id: 'thrower' }, { x: 0, y: 4, w: 1, h: 4, id: 'gate', day: 2 } ],  // gate = top-left, Day 2 only
+    decor: [],
+    actors: [ { id: 'haile', kind: 'haile', x: 8, y: 22, wander: [2, 16, 24, 26] },
+              { id: 'daidai', kind: 'person', look: 'daidai', x: 12, y: 19, dir: 'right' },
+              { id: 'yang', kind: 'person', look: 'yang', x: 16, y: 19, dir: 'left' } ],
+  },
+  street: {
+    // Letters: H townhouses, h hedge, p footpath, k lamppost, r road.  Fred can only walk RIGHT here.
+    draw: 'street', w: 40, h: 18, solid: 'Hhkr',
+    map: [
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 0  townhouses
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 1
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 2
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 3
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 4
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 5
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 6
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 7
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 8
+      'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', // 9
+      'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', // 10 front hedges
+      'pppppppppppppppppppppppppppppppppppppppp', // 11 footpath
+      'pppppppppppppppppppppppppppppppppppppppp', // 12
+      'pppppppppppppppppppppppppppppppppppppppp', // 13
+      'pppppppkppppppppppppppppkppppppppppkpppp', // 14 lampposts (k)
+      'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr', // 15 road
+      'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr', // 16
+      'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr', // 17
+    ],
+    lamps: [7, 24, 35],                         // tile x of each lamppost
+    cars: [ ['tesla', 3], ['audi', 17], ['mazda', 30] ],   // tile x where each car starts
+    spawns: { start: [1, 13, 'right'] },
+    doors: [], hotspots: [],
+    walkTriggers: [ { x: 19, y: 11, w: 2, h: 4, id: 'poo' }, { x: 27, y: 11, w: 2, h: 4, id: 'streetPee' },
+                      { x: 38, y: 11, w: 2, h: 4, id: 'streetEnd' } ],
+    decor: [], actors: [],
+  },
+};
+
+/* ---------------- 4. MAP IMAGES (embedded, unmodified) ---------------- */
+const IMAGES = {
+  livingroom: 'data:image/png;base64,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',
+  bedroom: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJAAAACQCAYAAADnRuK4AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAIoElEQVR4nO2dsW7jOBCGJ4sF7hWucJGrglRp/Q5brJHCENxskRfIGxjqrswLuLjGEFIETuH+SncHV0Y6F3mIKxZ7V3hHSzMUSWlIirL+DwhkxxyJsn/PDIeUfPXb73/8RwB05FPfHQDDBgICIiAgIAICAiIgICACAgIiICAg4rOrwdvxJUU/QKbcXN9bX4cHAiIgICACAgIiICAgAgICIiAgIAICAiIgICACAgIinJXo1Lgqn1JQWQ9LVgK6ub6n29ld9GNAROHISkDMvJjQYvpA692q/p/+XEV9zdbuuXoP39mRk20OpArC9Nz0mv6YX1dtQFiyFVCTcNTns8fSKBK9bZNHAnKyFZDuSVSx8Oubp+UHkZjagnhkKyCic0+iioWZPZZEdJ7bmNpCTPHIWkCqCFgsuhieq3eaF5Oz/3Fb035AWLIVkCoU3cOosHi4vdoWnic+2QpIFYruYUzC4PZqW4Sx+Fy5ro1PWXRLUUg8bPYoJLbANTOQVSHx7fjSy1RG7GPaGLqYsxIQUX9vaB/H7VO4ocg2BwLDAAICIsQhTHXDtjBgcte+7VOEF712BPwQjcLafsjr3aou/PkMq1OJ6JKT6NjnJvZAy+qL9zIJFs9z9U6Lqbv97eyO5sWEymIr7KXfsVJz2OyTHGdZfelk5/O+iwVkmkpogtu1aZ9iDU+K8kHTcYeOWEAshtljSZunZWO72WN5Jhzf9vNiQmWib6rNC3XxFqH3J4U9is0j+bRRCeaB5sXEmojqXse3fcpVhDbPWLasYLNHa9pnqi9FfbxiWwu6LLZGgehtfAjigVQRtbW1wftN/WbbYM/J4jc9tnnWPlH7ahPI5mlJNxu/kB7EA8V6wxZT2fC62v1FxfSbd3ufbx2fq3rOTY8Pm71I/G37b7KPjVhAsb9tbb4NUm5nd3TY7I25C+csqqBVj6P/n/dn2g8fJzVqH33P0UV2c2F9wuHSFFrZk+hfGJNH0vep76ePsLysvtQelssjOs/0S0S+IncKyMcNxlzxxwXHru64i11TKGs71HeFMJ++hQxDrpHVvJgQKcLyEblTQLYYvKTX6MtFef+mfoTIEdh+Sa/1/9+OL2ehKeRWF2Go/jehnlcMMJk6Ispi6xwo+LRRQQ6koNac9Nwm1FY/Tip6qwOlGAr60NQPaf9M9imv4ojR/yZ6qQO5cqBUdMkV2uRI6rmkmLwlcp/TKOpAl4hrZt42vJXYxgZ1oAxQC4G2bW7EqgM5F5SV1dfmThWvjZ0JxXP1fqqnWPoRgmWRLhwzsc+J6HReva4HcuVA6mRqaNTJ1Nh1oOJ42qrXppmuIeMbVN1c31NZfaVl8Vo/V7e6jWmfIfvfROw8NdhyjtAiUvebEnVxWagFXzH22YUY64HEhURVPKE+7Fii9OXt+BL8g46xzzZwjed2dtcYmnza6IjrQPqHLf3QTfuz9SNlHaXJhp/r21jH72qfZR3IJJ7Q26YcyEWMHGNJr/SDvhMRNW7ZJkWO47KPTfAcKMYWhCFGHUh8XVjsxVG8/y75QwwP4LOkI+Uoy2WvDuOddaCfJRNuk6QOxAeLBZ9EipqJDz71olz6SpR5HYiqUwdjl+ebvE8f3/AlvTov1/HdJ+pAJKtrSN/AvuhzPktClteFjZW348uHL0DO9/uJtR5IlAONEc6BTO+L7bW+4ByoLLb1Ul3XagLT0tsmZDmQgxxGIaHtec7MhP5aDv2PDULYiMB6INCZLNcDgfzJug6UQ4yHPa4LA4nAdWGgM6gDgU6gDgR7kX1sEMJGBOpAoDOoA4FOoA4Ee5E96kAgGKgDgc6gDgQ6gToQ7EX2sUEIGxGoA4HOoA4EOoE6EOxF9qgDgayBgIAI5EAXTtY5kIsh5AiXbh+bTiHs5vq+rlSud6usL+kFcWldB1LvOMrczu6MdycFl0/Q38owte3jHoawT0frHKiaHX9VKJ9OG747e9t4nUOOcOn22d0faPO0pBmd5kp4zoRncMH46DQXxh7o7fhC693qNNx7CtovMBBa50D8+xgqnER3qRn1nSOM3V5K6xzIFlM/5EsDyBEu3T42rUPY2TS/lkSD8YEkGojAXNiFk/VcWA4xHvZYDwQGDAQERCAHunCi50C2GfQhxHjY2+1jgxAGROC6sBGwmD50sivJHcKu/vz70ZoDgWFjmrv0xefCws99x2jYD7sOhBA2Etr+xpmv14KARoQ+4m7yYG0ukkAOdOFwDnTY7L1reqqNi6vjv/80CmgIMR72ce1dPzKMOhAQAQEBEciBBooamlpdu1cdaV5M6BN9ph/0nT45xlGuEGbNgZydySBGj9V+vVt1qjCvd6v68XP17lxJ6hqRIYQNkPVuRc/Ve/1YFYWLxfShti2Ka3FfIKABspg+0LyY0OyxPPNCTUJikfHfYbOnstjSD/pO692q1U01dZADDYhi+u0sdJkEY8ppqupYP+aba/LNxl3eyJkDuRaUSe64MeQcI2d79hjzYkKL6QPNHstaGKpHMtmrtiyepjzIpw6EqYyBwV5HFQ+R/5KN+i70PwUnvRwLAhoYJ6GcRLTerWoh2TCFOp8RmA9YEz0QOP8hOomIcyEekbEY1rvVhzyIcyD15uL6D6401YOi5kC55giXaK8mz745kIo+0uL2nAc1eTJXHQghbCCwtyE6H0lR5ZfHqG04B1I916kk0L5fENCAUD0Ee4ay2NLi6F+RVu3U9KRrPoQcaGCoa5zVu6L4rPfR1/n4rBNCHeiC7PlOuKa8hP+vfl6qfZOtyU61Rx3owljvVsb1yj7TESZbyTQGEebCBsXb8YXKYmv8ra/DZm+NFmzb1s5F0PtEw75f+6736Zb0EfcHGph9m3tU+tra7FzXlSEHGhi2JLqLrfTnKSCgAcIfehcPpo/SpKAOBKyI60AA2MAwHoiAgIAICAiIgICACAgIiICAgAgICIj4Hznbtnck8rqYAAAAAElFTkSuQmCC',
+  toilet: 'data:image/png;base64,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',
+};
+// pixel portrait of Haile for the last screen (made from his photo, 4 Game Boy shades)
+const PORTRAIT = 'data:image/png;base64,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';
+/* ======================= END OF CONFIG ======================= */
+
+/* =====================================================================
+   ART  (everything below is drawn in code with the 4 Game Boy shades)
+   ===================================================================== */
+const PAL = ['#e0f8cf', '#86c06c', '#306850', '#071821'];   // light -> dark (taken from your maps)
+const PAL_RGB = [[224, 248, 207], [134, 192, 108], [48, 104, 80], [7, 24, 33]];
+const W = 160, H = 144, T = 8;
+function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function R(g, x, y, w, h, c) { g.fillStyle = PAL[c]; g.fillRect(x | 0, y | 0, w | 0, h | 0); }
+function box(g, x, y, w, h, fill, line) { R(g, x, y, w, h, line); R(g, x + 1, y + 1, w - 2, h - 2, fill); }
+function pat(g, x, y, w, h, p) { // fill area with an 8x8 pattern of digits
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const ch = p[(y + j) & 7][(x + i) & 7]; if (ch !== '.') R(g, x + i, y + j, 1, 1, +ch);
+  }
+}
+// draw pixel rows ('0'-'3', '.' = see-through) at x,y. map lets letters stand for shades
+function rows(g, x, y, data, map, flip) {
+  for (let j = 0; j < data.length; j++) { const r = data[j];
+    for (let i = 0; i < r.length; i++) { let ch = r[flip ? r.length - 1 - i : i];
+      if (map && ch in map) ch = map[ch]; if (ch === '.' || ch === undefined || ch === null) continue;
+      R(g, x + i, y + j, 1, 1, +ch); } }
+}
+function sprite(data, map, flip) { const c = mkCanvas(data[0].length, data.length); rows(c.getContext('2d'), 0, 0, data, map, flip); return c; }
+function disc(g, cx, cy, r, c) { for (let y = -r; y <= r; y++) { const w = Math.round(Math.sqrt(r * r - y * y)); R(g, cx - w, cy + y, w * 2 + 1, 1, c); } }
+
+/* ---------------- FONT (8x8 cell, 5x7 letters + descenders) ---------------- */
+const FONT = {}; (function () {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,!?'\"-():;/>~", hex = '0e11111f111111001e11111e11111e000e11101010110e001e11111111111e001f10101e10101f001f10101e101010000e11101711110f001111111f111111000e04040404040e000702020202120c0011121418141211001010101010101f00111b15151111110011191513111111000e11111111110e001e11111e101010000e11111115120d001e11111e141211000f10100e01011e001f040404040404001111111111110e0011111111110a04001111111515150a0011110a040a11110011110a04040404001f01020408101f0000000e010f110f0010101e1111111e0000000e1010110e0001010f1111110f0000000e111f100e000609081c0808080000000f11110f010e101016191111110004000c0404040e00020006020202120c10101214181412000c04040404040e0000001a1515151100000016191111110000000e1111110e0000001e11111e101000000f11110f0101000016191010100000000f100e011e0008081c08080906000000111111130d0000001111110a04000000111115150a000000110a040a110000001111110f010e00001f0204081f000e11131519110e00040c040404040e000e11010204081f001f02040201110e0002060a121f0202001f101e0101110e000608101e11110e001f010204080808000e11110e11110e000e11110f01020c00000000000000000000000000000c0c0000000000000c040804040404040004000e1101020400040004040800000000000a0a0000000000000000000e0000000002040808080402000804020202040800000c0c000c0c0000000c0c000c040800000102040810000010181c1e1c181000001f0e0400000000';
+  for (let i = 0; i < chars.length; i++) { const g = []; for (let r = 0; r < 8; r++) g.push(parseInt(hex.substr(i * 16 + r * 2, 2), 16)); FONT[chars[i]] = g; }
+})();
+const CJK = {};   // pixel glyphs for Chinese characters, drawn once from the system font and cached
+function cjkGlyph(ch) {
+  if (CJK[ch]) return CJK[ch]; const c = mkCanvas(12, 12), g = c.getContext('2d');
+  g.font = '11px "Noto Sans SC","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif'; g.textBaseline = 'top'; g.fillStyle = '#000'; g.fillText(ch, 0, 0);
+  const d = g.getImageData(0, 0, 12, 12).data, px = []; for (let i = 0; i < 144; i++) if (d[i * 4 + 3] > 110) px.push(i);
+  return (CJK[ch] = px);
+}
+const isWide = ch => ch.charCodeAt(0) > 0x2e80;
+function textWidth(s) { let w = 0; for (const ch of s) w += isWide(ch) ? 12 : 6; return w; }
+/* Chinese characters are too detailed for 8x8 pixels, so on the main screen they are drawn sharply on a
+   high-resolution layer (#ov) that sits exactly on top of the game screen. OVS = how much sharper (4x). */
+const OVS = 4, OVQ = [];
+function text(g, s, x, y, c = 3, scale = 1) {
+  let cx = 0;
+  for (const ch of s) {
+    if (isWide(ch)) {
+      if (g === ctx) OVQ.push([ch, x + cx * scale, y - 2 * scale, c, scale]);
+      else for (const i of cjkGlyph(ch)) R(g, x + (cx + i % 12) * scale, y - 2 * scale + Math.floor(i / 12) * scale, scale, scale, c);
+      cx += 12; continue; }
+    const gl = FONT[ch] || FONT['?'];
+    for (let r = 0; r < 8; r++) for (let b = 0; b < 5; b++) if (gl[r] & (16 >> b)) R(g, x + (cx + b) * scale, y + r * scale, scale, scale, c);
+    cx += 6; }
+}
+
+/* ---------------- PEOPLE (16x16, built from one template) ----------------
+   o outline, h hair, s skin, E eyes row, t shirt, a hands, p trousers, f shoes */
+const P_DOWN = ['................', '.....oooooo.....', '....ohhhhhho....', '...ohhhhhhhho...', '...ohsshhssho...',
+  '...oEEEEEEEEo...', '...osssssssso...', '....osssssso....', '....oottttoo....', '...otttttttto...',
+  '..otttttttttto..', '..oattttttttao..', '..oaoppppppoao..', '...oppppppppo...'];
+const P_UP = P_DOWN.slice(0, 4).concat(['...ohhhhhhhho...', '...ohhhhhhhho...', '...ohhhhhhhho...', '....ohhhhhho....'], P_DOWN.slice(8));
+const P_SIDE = ['................', '......ooooo.....', '.....ohhhhho....', '....ohhhhhhho...', '....ohhhhssso...',
+  '....oSSSSSSSo...', '....ohhsssssso..', '.....osssssso...', '......ottto.....', '.....otttttto...',
+  '.....otttttto...', '.....ottttaao...', '.....opppppoo...', '.....oppppppo...'];
+const LEGS = {
+  down: [['...opppoopppo...', '...ffff..ffff...'], ['...opppoofffo...', '...ffff.........'], ['...offfoopppo...', '.........ffff...']],
+  side: [['.....oppppo.....', '.....ffffff.....'], ['....oppo.oppo...', '...fff.....fff..'], ['.....opppo......', '.....fffff......']],
+};
+const SLIM_DOWN = ['....oottttoo....'.replace('oottttoo', '.otttto.'), '....otttttto....', '....otttttto....', '....oattttao....', '.....oppppo.....', '.....oppppo.....'];
+const LEGS_SLIM = [['.....opoopo.....', '.....ff..ff.....'], ['.....opoofo.....', '.....ff.........'], ['.....ofoopo.....', '.........ff.....']];
+const LOOKS = {
+  fred:   { hair: 3, shirt: 2, pants: 3, glasses: true },
+  max:    { hair: 1, shirt: 2, pants: 3, tall: true, slim: true, style: 'mid', nose: true },   // light hair, a bit longer, slim
+  xiaoyi: { hair: 3, shirt: 1, pants: 0, style: 'long', glasses: true },                     // Mary
+  yang:   { hair: 2, shirt: 1, pants: 3, style: 'long', slim: true },                        // Yijun
+  daidai: { hair: 3, shirt: 0, pants: 2, style: 'pig', child: true },
+};
+function setPx(r, i, ch) { return r.slice(0, i) + ch + r.slice(i + 1); }
+function personFrames(look) {
+  const L = LOOKS[look], out = {};
+  for (const dir of ['down', 'up', 'right']) {
+    out[dir] = [];
+    for (let f = 0; f < 3; f++) {
+      let base = (dir === 'down' ? P_DOWN : dir === 'up' ? P_UP : P_SIDE).slice();
+      if (L.slim && dir !== 'right') base = base.slice(0, 8).concat(SLIM_DOWN);
+      base = base.concat(L.slim && dir !== 'right' ? LEGS_SLIM[f] : LEGS[dir === 'right' ? 'side' : 'down'][f]);
+      if (dir === 'down') { base[5] = '...o' + (L.glasses ? 'gleggelg' : 'ssssssss') + 'o...'; if (!L.glasses) base[6] = setPx(setPx(base[6], 5, 'e'), 10, 'e'); }
+      if (dir === 'right') { base[5] = '....o' + (L.glasses ? 'hhhsgleg' : 'hhhsssss') + 'o...'; if (!L.glasses) base[6] = setPx(base[6], 11, 'e'); }
+      if (L.style === 'long') for (let r = 5; r <= 10; r++) {
+        if (dir === 'right') { base[r] = setPx(setPx(base[r], 3, 'o'), 4, 'h'); if (r > 7) base[r] = setPx(base[r], 5, 'h'); }
+        else { base[r] = setPx(setPx(setPx(setPx(base[r], 2, 'o'), 3, 'h'), 12, 'h'), 13, 'o'); }
+      }
+      if (L.style === 'mid') { if (dir === 'right') { base[5] = setPx(base[5], 5, 'h'); base[6] = setPx(setPx(base[6], 4, 'o'), 5, 'h'); }
+        else { base[5] = setPx(setPx(base[5], 3, 'h'), 12, 'h'); base[6] = setPx(setPx(base[6], 3, 'h'), 12, 'h'); } }
+      if (L.nose && dir === 'right') { base[5] = setPx(base[5], 13, 's'); base[6] = setPx(base[6], 13, 'o'); }
+      if (L.style === 'pig') { const sides = dir === 'right' ? [[3, 2]] : [[2, 1], [13, 14]];
+        for (const [a, b] of sides) { base[2] = setPx(base[2], a, 'o'); base[3] = setPx(setPx(base[3], b, 'o'), a, 'h');
+          base[4] = setPx(setPx(base[4], b, 'o'), a, 'h'); base[5] = setPx(base[5], a, 'o'); } }
+      let rws = base;
+      if (L.tall) rws = base.slice(1, 12).concat([base[11]], base.slice(12)); // 1px taller than Fred
+      if (L.child) { const face = base.slice(1, 9); 
+        rws = ['', '', '', ''].map(() => '................').concat(face, [base[10], base[12], base[14], base[15]]); }
+      const map = { o: 3, h: L.hair, s: 0, e: 3, g: 3, l: 1, t: L.shirt, a: 0, p: L.pants, f: 3, E: 0, S: 0 };
+      out[dir].push(sprite(rws, map));
+    }
+    if (dir === 'right') out.left = out.right.map(c => { const m = mkCanvas(16, 16), g = m.getContext('2d'); g.translate(16, 0); g.scale(-1, 1); g.drawImage(c, 0, 0); return m; });
+  }
+  return out;
+}
+
+/* ---------------- HAILE (from the photos: black saddle & head, tan face,
+   white chest/legs, big upright ears, slim long legs, tail up) ---------------- */
+const HAILE_R0 = ['................', '..........K..K..', '.........KDKKDK.', '..K......KDKKDK.', '.KWK.....KKKKKK.',
+  '.KWK.....KTETTK.', '..KK.....KTTTTTK', '..KKKKKKKKKTTTKK', '.KKKKKKKKKKWTK..', '.KWKKKKKKKWWK...',
+  '.KWWWKKKWWWWK...', '.KWWWWWWWWWWK...', '..KWWKKKKKWWK...', '..KWK....KWK....', '..KWK....KWK....', '..KK.....KK.....'];
+const HAILE_R1 = HAILE_R0.slice(0, 12).concat(['..KWWKKKKKWWK...', '.KWK.....KWWK...', '.KWK......KWK...', '.KK.......KK....']);
+const HAILE_R2 = HAILE_R0.slice(0, 12).concat(['..KWWKKKKKWWK...', '...KWK..KWK.....', '...KWK..KWK.....', '...KK...KK......']);
+const HAILE_D = ['...KK......KK...', '..KDDK....KDDK..', '..KDDDK..KDDDK..', '..KDDDKKKKDDDK..', '...KKKTKKTKKK...',
+  '....KTTKKTTK....', '....KEKTTKEK....', '....KTTTTTTK....', '.....KTKKTK.....', '.....KWTTWK.....',
+  '....KWWWWWWK....', '...KKWWWWWWKK...', '...KKWWWWWWKK...', '....KWWKKWWK....', '....KWK..KWK....', '....KK....KK....'];
+const HAILE_U = ['..KK........KK..', '..KDK......KDK..', '..KDDKKKKKKDDK..', '...KKKKKKKKKK...', '...KKKKKKKKKK...',
+  '....KKKKKKKK....', '.....KKKKKK.....', '.....KKWWKK.....', '....KKKWWKKK....', '...KKKKKKKKKK...',
+  '...KWKKKKKKWK...', '...KWWKKKKWWK...', '...KWWWKKWWWK...', '....KWWKKWWK....', '....KWK..KWK....', '....KK....KK....'];
+const HMAP = { K: 3, D: 2, T: 1, W: 0, E: 3 };
+const HSIL = { K: 3, D: 3, T: 3, W: 3, E: 3 };   // silhouette for the sunset
+// little poo, leash, food bowl
+const POO = ['...33...', '..3223..', '..3333..', '.322223.', '32222223', '.333333.'];
+const LEASH = ['.333....', '3..3....', '.33.....', '.2......', '.2......', '2.2.....', '2..2....', '2..2....', '2..2....', '.22.....', '..2.....', '..2.....', '.333....', '.303....', '..3.....'];
+const FOODBOWL = ['...3333333...', '.33121211133.', '3311212121133', '3222222222223', '.32222222223.', '..333333333..'];
+
+let SPR = {};
+function buildSprites() {
+  for (const k in LOOKS) SPR[k] = personFrames(k);
+  SPR.haile = {
+    right: [sprite(HAILE_R0, HMAP), sprite(HAILE_R1, HMAP), sprite(HAILE_R2, HMAP)],
+    left: [sprite(HAILE_R0, HMAP, 1), sprite(HAILE_R1, HMAP, 1), sprite(HAILE_R2, HMAP, 1)],
+    down: [sprite(HAILE_D, HMAP)], up: [sprite(HAILE_U, HMAP)],
+    sil: [sprite(HAILE_R0, HSIL), sprite(HAILE_R1, HSIL), sprite(HAILE_R2, HSIL)] };
+  SPR.fredSil = ['right'].map(d => SPR.fred[d].map(c => { const m = mkCanvas(16, 16), g = m.getContext('2d'); g.drawImage(c, 0, 0);
+    g.globalCompositeOperation = 'source-in'; g.fillStyle = PAL[3]; g.fillRect(0, 0, 16, 16); return m; }))[0];
+  { const c = mkCanvas(16, 16), g = c.getContext('2d'); g.drawImage(SPR.fred.up[0], 0, 0);   // back view with hands removed (they're on the keys)
+    g.clearRect(0, 11, 3, 3); g.clearRect(13, 11, 3, 3); SPR.fredPlay = c; }
+  // taller running man for the end scene (stretched body and legs), as a silhouette
+  { const src = SPR.fredSil[0]; SPR.fredTall = SPR.fredSil.map(fr => { const c = mkCanvas(16, 24), g = c.getContext('2d');
+      g.drawImage(fr, 0, 0, 16, 8, 0, 0, 16, 8);               // head
+      g.drawImage(fr, 0, 8, 16, 4, 0, 8, 16, 8);               // body (double height)
+      g.drawImage(fr, 0, 12, 16, 4, 0, 16, 16, 8); return c; }); }
+  SPR.poo = sprite(POO); SPR.leash = sprite(LEASH); SPR.foodbowl = sprite(FOODBOWL);
+}
+
+/* ---------------- YARD & STREET (drawn once into a picture) ---------------- */
+const TILES = {
+  d: ['00000001', '00000001', '00000001', '11111111', '00010000', '00010000', '00010000', '11111111'],   // composite decking
+  g: ['11111111', '11121111', '11212111', '11111111', '11111111', '21111111', '12111112', '11111121'],   // grass
+  b: ['33333333', '22232222', '21232221', '33333333', '22222322', '22122321', '22222322', '33333333'],   // brick border
+  e: ['22222222', '23222122', '22212222', '22222232', '21222222', '22232212', '22222222', '22122222'],   // soil
+  f: ['32123212', '32123212', '32123212', '32123212', '32123212', '32123212', '32123212', '32123212'],   // fence palings
+  W: ['00000000', '11111111', '00000000', '00000000', '11111111', '00000000', '00000000', '11111111'],   // weatherboard wall
+  p: ['11111112', '11111112', '11111112', '11111112', '11111112', '11111112', '11111112', '22222222'],   // footpath pavers
+  r: ['22222222', '22232222', '22222222', '22222223', '22222222', '23222222', '22222222', '22222232'],   // road
+  H: ['00000000', '00000000', '00000000', '00000000', '00000000', '00000000', '00000000', '00000000'],
+  h: ['22122212', '21212121', '12221222', '22212212', '21222122', '12122221', '22212122', '33333333'],   // hedge
+};
+function drawTiles(g, sc) {
+  for (let y = 0; y < sc.h; y++) for (let x = 0; x < sc.w; x++) {
+    let ch = sc.map[y][x]; if ('GTP'.includes(ch)) ch = 'd'; if (ch === 'L') ch = 'g'; if (ch === 'k') ch = 'p';
+    const p = TILES[ch]; if (p) pat(g, x * 8, y * 8, 8, 8, p);
+  }
+}
+function leaf(g, cx, cy, len, wid, dx, dy) { // a long pointed leaf drawn row by row
+  for (let i = 0; i <= len; i++) { const t = i / len, w = Math.round(Math.sin(Math.PI * t) * wid);
+    const px = Math.round(cx + dx * i), py = Math.round(cy + dy * i);
+    for (let k = -w - 1; k <= w + 1; k++) { const ax = Math.abs(dx) > Math.abs(dy);
+      R(g, ax ? px : px + k, ax ? py + k : py, 1, 1, Math.abs(k) > w ? 3 : k === 0 ? 1 : 2); } }
+}
+function drawYard() {
+  const sc = SCENES.yard, c = mkCanvas(sc.w * 8, sc.h * 8), g = c.getContext('2d');
+  drawTiles(g, sc);
+  // house wall: skirting, windows, glass sliding door
+  R(g, 0, 31, 256, 1, 3); R(g, 0, 29, 256, 2, 2);
+  for (const wx of [24, 64, 168, 208]) { box(g, wx, 6, 24, 16, 1, 3); R(g, wx + 11, 6, 2, 16, 3); R(g, wx + 3, 9, 3, 1, 0); R(g, wx + 3, 10, 1, 3, 0); }
+  box(g, 110, 0, 36, 26, 1, 3); R(g, 112, 2, 15, 24, 0); R(g, 129, 2, 15, 24, 0); R(g, 127, 0, 2, 26, 3);
+  for (let i = 0; i < 6; i++) { R(g, 114 + i, 14 - i * 2, 1, 2, 1); R(g, 131 + i, 14 - i * 2, 1, 2, 1); }
+  R(g, 112, 24, 32, 2, 2); R(g, 124, 12, 2, 4, 3);
+  // outdoor dining table with chairs (tiles 4-9, rows 5-9)
+  for (const cx of [40, 56]) { box(g, cx, 40, 12, 7, 1, 3); box(g, cx, 73, 12, 7, 1, 3); }
+  box(g, 34, 47, 44, 26, 1, 3); for (let y = 51; y < 72; y += 5) R(g, 35, y, 42, 1, 2);
+  R(g, 34, 73, 44, 1, 3); R(g, 36, 74, 2, 4, 3); R(g, 74, 74, 2, 4, 3);
+  // brick bed plants
+  for (let x = 14; x < 244; x += 12) { R(g, x, 228, 1, 6, 1); R(g, x - 2, 230, 2, 1, 1); R(g, x + 1, 229, 2, 1, 1); R(g, x - 1, 226, 3, 2, 0); }
+  // bird of paradise (big tropical leaves, lower right corner)
+  const bx = 220, by = 210;
+  leaf(g, bx - 2, by, 40, 5, -0.25, -1); leaf(g, bx + 10, by, 44, 5, 0.15, -1); leaf(g, bx + 4, by, 36, 4, -0.8, -0.6);
+  leaf(g, bx + 18, by, 30, 4, 0.5, -0.9); leaf(g, bx - 6, by + 2, 30, 4, -1, -0.3);
+  R(g, bx - 4, by - 2, 28, 6, 2); R(g, bx - 4, by + 3, 28, 1, 3);
+  for (const [fx, fy] of [[204, 172], [236, 166]]) { R(g, fx, fy, 10, 3, 3); R(g, fx + 1, fy + 1, 8, 1, 1); R(g, fx + 3, fy - 4, 2, 4, 0); R(g, fx + 5, fy - 6, 2, 6, 1); R(g, fx + 7, fy - 3, 2, 3, 0); R(g, fx + 4, fy + 3, 1, 8, 2); }
+  return c;
+}
+function drawThrower(g, x, y) { // long stick with a cup and ball, leaning on the deck
+  R(g, x + 3, y + 6, 2, 16, 3); R(g, x + 2, y + 20, 4, 3, 2); R(g, x + 2, y + 20, 4, 1, 3);
+  box(g, x, y, 8, 7, 1, 3); R(g, x + 2, y + 1, 4, 4, 0); R(g, x + 3, y + 2, 2, 2, 1);
+}
+/* Side-view cars, facing right. Each car: top outline points [x, y] from rear to front,
+   window area, colours. Ground is y = 21, wheels sit on it. */
+const CARS = {
+  tesla: { len: 46, body: 0, glass: 2, wheels: [10, 35],            // Model Y: tall, smooth fastback crossover, no grille
+    top: [[0, 11], [1, 8], [4, 6], [10, 3], [17, 1], [26, 1], [31, 2], [36, 8], [43, 9], [46, 12]], win: [6, 35], pillars: [21], belt: 9 },
+  audi:  { len: 40, body: 2, glass: 1, wheels: [8, 31],             // A3 hatchback: short, upright hatch, big single-frame grille
+    top: [[0, 10], [1, 4], [3, 2], [9, 1], [21, 1], [26, 2], [31, 7], [38, 8], [40, 11]], win: [3, 30], pillars: [15], belt: 9, grille: 'audi' },
+  mazda: { len: 46, body: 1, glass: 2, wheels: [10, 36],            // Mazda3 sedan: long bonnet, short boot, wing grille
+    top: [[0, 10], [1, 8], [7, 7], [12, 2], [24, 1], [29, 2], [34, 8], [44, 9], [46, 11]], win: [10, 33], pillars: [21], belt: 9, grille: 'mazda' },
+};
+function lerpTop(pts, x) { for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+  if (x <= x1) return Math.round(y0 + (y1 - y0) * (x - x0) / Math.max(1, x1 - x0)); } return pts[pts.length - 1][1]; }
+function drawCar(g, kind, x, y) {
+  const c = CARS[kind], L = c.len, bottom = 17;
+  for (let i = 0; i <= L; i++) { const t = lerpTop(c.top, i);
+    R(g, x + i, y + t, 1, bottom - t + 1, c.body); R(g, x + i, y + t, 1, 1, 3); R(g, x + i, y + bottom, 1, 1, 3);
+    if (i === 0 || i === L) R(g, x + i, y + t, 1, bottom - t + 1, 3);
+    if (i >= c.win[0] && i <= c.win[1]) { const wt = t + 2; if (c.belt - wt >= 1) R(g, x + i, y + wt, 1, c.belt - wt, c.glass); } }
+  for (const p of c.pillars) R(g, x + p, y + lerpTop(c.top, p), 2, c.belt - lerpTop(c.top, p), c.body === 0 ? 3 : 3);
+  R(g, x + 2, y + c.belt + 3, L - 4, 1, c.body === 2 ? 1 : 2);                  // shoulder line
+  const mid = Math.round((c.wheels[0] + c.wheels[1]) / 2);
+  R(g, x + mid, y + c.belt, 1, bottom - c.belt - 1, 3);                           // door gap
+  R(g, x + mid - 6, y + c.belt + 2, 3, 1, 3); R(g, x + mid + 4, y + c.belt + 2, 3, 1, 3);   // handles
+  R(g, x + L - 3, y + lerpTop(c.top, L - 3) + 1, 3, 1, kind === 'tesla' ? 2 : 0); // headlight
+  R(g, x + 1, y + lerpTop(c.top, 1) + 1, 2, 2, 3);                                // tail light
+  if (c.grille === 'audi') { R(g, x + L - 2, y + 12, 2, 4, 3); for (let i = 0; i < 4; i++) R(g, x + 30 + i * 2, y + 6, 1, 1, 0); }
+  if (c.grille === 'mazda') { R(g, x + L - 2, y + 12, 2, 3, 3); R(g, x + L - 4, y + 12, 2, 1, 3); }
+  if (kind === 'tesla') { R(g, x + 10, y + 2, 12, 1, 2); }                        // glass roof
+  for (const wx of c.wheels) { disc(g, x + wx, y + 17, 5, c.body === 0 ? 0 : c.body); disc(g, x + wx, y + 17, 4, 3); disc(g, x + wx, y + 17, 2, 1); R(g, x + wx, y + 17, 1, 1, 3); }
+}
+function drawStreet() {
+  const sc = SCENES.street, c = mkCanvas(sc.w * 8, sc.h * 8), g = c.getContext('2d');
+  drawTiles(g, sc);
+  // Federation-style cottages (from Fred's photo): terracotta tiled roofs, gables with timber fretwork,
+  // verandahs on turned posts, white-painted brick or red brick, picket or low brick fences.
+  R(g, 0, 0, sc.w * 8, 88, 0);                                                       // sky
+  for (let x = 0; x < sc.w * 8; x++) { const h = 14 + Math.round(Math.sin(x / 9) * 4 + Math.sin(x / 23) * 5);   // trees behind
+    for (let y = 0; y < h; y++) R(g, x, y, 1, 1, (x * 7 + y * 3) % 11 === 0 ? 1 : 2); }
+  for (let i = 0; i < 4; i++) {
+    const x = i * 80, white = i % 2 === 0, wall = white ? 0 : 2;
+    // roof (hipped, terracotta tiles = dark rows)
+    for (let y = 14; y < 40; y++) { const inset = Math.round((40 - y) * 0.9);
+      for (let xx = x + 2 + inset; xx < x + 78 - inset; xx++) R(g, xx, y, 1, 1, (y % 3 === 0) ? 3 : ((xx + (y >> 1)) % 4 === 0 ? 3 : 2)); }
+    R(g, x + 34, 12, 12, 3, 3); R(g, x + 36, 13, 8, 1, 1);                           // ridge vent
+    if (!white) { R(g, x + 60, 4, 6, 14, 2); R(g, x + 59, 3, 8, 2, 3); R(g, x + 70, 6, 5, 12, 2); R(g, x + 69, 5, 7, 2, 3); }   // chimneys
+    // front gable with fretwork
+    const gx = white ? x + 6 : x + 44, gw = 30;
+    for (let y = 0; y < 16; y++) { const w = Math.round(y * gw / 32);
+      R(g, gx + gw / 2 - w - 1, 24 + y, 1, 1, 3); R(g, gx + gw / 2 + w, 24 + y, 1, 1, 3);
+      if (w > 0) R(g, gx + gw / 2 - w, 24 + y, w * 2, 1, white ? 1 : 2); }
+    for (let k = 0; k < 7; k++) R(g, gx + 4 + k * 3, 37 + (k & 1), 2, 2, 0);          // fretwork
+    // walls
+    R(g, x + 2, 40, 76, 40, wall);
+    if (!white) for (let y = 41; y < 80; y += 3) { R(g, x + 2, y, 76, 1, 3); for (let xx = x + 2 + ((y / 3) & 1) * 3; xx < x + 78; xx += 6) R(g, xx, y - 2, 1, 2, 3); }
+    else for (let y = 43; y < 80; y += 4) R(g, x + 2, y, 76, 1, 1);
+    // verandah roof (corrugated for white house, tiled for brick house) + frieze
+    R(g, x, 40, 80, 5, white ? 2 : 3); for (let xx = x; xx < x + 80; xx += 2) R(g, xx, 40, 1, 5, white ? 1 : 2);
+    R(g, x, 45, 80, 1, 3);
+    if (white) for (let xx = x + 2; xx < x + 78; xx += 3) R(g, xx, 46, 1, 3, 3);     // balustrade frieze
+    else R(g, x, 47, 80, 2, 3);                                                     // timber beam
+    for (const px of [x + 3, x + 40, x + 75]) { R(g, px, 46, 3, 34, white ? 0 : 3); R(g, px, 46, 1, 34, white ? 1 : 2); }   // posts
+    // windows (pairs) and front door
+    const wx = white ? x + 12 : x + 48;
+    for (const ox of [0, 12]) { box(g, wx + ox, 54, 9, 16, white ? 1 : 0, 3); for (let y = 56; y < 69; y += 2) R(g, wx + ox + 1, y, 7, 1, white ? 0 : 1); }
+    R(g, wx - 2, 70, 25, 2, 3);                                                    // sill
+    const dx = white ? x + 46 : x + 16; box(g, dx, 52, 11, 28, white ? 3 : 2, 3); R(g, dx + 8, 66, 1, 2, 0);
+    if (white) R(g, dx + 14, 60, 3, 4, 3);                                          // wall lamp
+    // bins and pot plants
+    R(g, x + (white ? 6 : 62), 70, 6, 9, 1); R(g, x + (white ? 6 : 62), 69, 6, 1, 3);
+    R(g, x + (white ? 30 : 30), 72, 5, 7, 2); R(g, x + 29, 68, 7, 4, 1);
+    // front fence
+    if (white) { R(g, x, 82, 80, 1, 0); for (let xx = x; xx < x + 80; xx += 3) { R(g, xx, 79, 2, 9, 0); R(g, xx, 79, 2, 1, 1); R(g, xx + 2, 80, 1, 8, 2); } }
+    else { R(g, x, 80, 80, 8, 2); for (let y = 80; y < 88; y += 2) { R(g, x, y, 80, 1, 3); for (let xx = x + ((y >> 1) & 1) * 2; xx < x + 80; xx += 4) R(g, xx, y + 1, 1, 1, 3); }
+      for (let xx = x + 4; xx < x + 76; xx += 2) R(g, xx, 82, 1, 4, 3); R(g, x, 79, 80, 1, 1); }
+  }
+  for (const px of [76, 236]) { R(g, px, 0, 4, 88, 2); R(g, px, 0, 1, 88, 1); R(g, px - 6, 6, 16, 2, 3); }   // power poles
+  // FOOTPATH (from Fred's photo): fence line -> thin garden strip -> large concrete slabs -> grass verge -> kerb -> road
+  const FW = sc.w * 8;
+  R(g, 0, 87, FW, 1, 3);
+  R(g, 0, 88, FW, 3, 2); for (let x = 0; x < FW; x += 5) R(g, x + (x % 3), 88 + (x % 2), 1, 1, 3);   // soil strip under the fence
+  for (const px of [22, 61, 98, 141, 187, 226, 263, 301]) {                                           // small shrubs along the fence
+    R(g, px, 84, 1, 5, 3); R(g, px - 2, 85, 2, 1, 3); R(g, px + 1, 86, 2, 1, 3); R(g, px - 1, 83, 3, 2, 2); }
+  R(g, 0, 91, FW, 19, 0); R(g, 0, 91, FW, 1, 1);                                                      // concrete slabs
+  for (let x = 0; x < FW; x++) if ((x * 13) % 17 === 0) R(g, x, 93 + (x % 15), 1, 1, 1);               // concrete speckle
+  for (let k = 0; k < FW; k += 46) for (let y = 91; y < 110; y++) R(g, k + Math.round((y - 91) * -0.5), y, 1, 1, 2);   // slanted slab joints
+  R(g, 0, 109, FW, 1, 1);
+  pat(g, 0, 110, FW, 7, TILES.g); for (let x = 0; x < FW; x += 4) R(g, x + (x % 3), 110 + (x % 5), 1, 2, 2);   // grass verge
+  R(g, 0, 116, FW, 2, 1); R(g, 0, 117, FW, 1, 0);                                                    // kerb top
+  R(g, 0, 118, FW, 2, 2); for (let x = 0; x < FW; x += 37) R(g, x, 116, 1, 4, 3);                    // kerb face + joints
+  R(g, 0, 120, FW, 1, 3);
+  for (let x = 4; x < sc.w * 8; x += 24) R(g, x, 141, 12, 2, 1);
+  for (const [k, tx] of sc.cars) drawCar(g, k, tx * 8, 122);
+  return c;
+}
+function drawGate(g, x, y) { // big wooden gate in the top-left fence (Day 2), 10 x 34
+  R(g, x, y, 10, 34, 3); R(g, x + 1, y + 1, 8, 32, 2);
+  for (let i = 0; i < 4; i++) R(g, x + 1 + i * 2, y + 2, 1, 30, 1);
+  R(g, x + 1, y + 6, 8, 2, 3); R(g, x + 1, y + 26, 8, 2, 3); for (let i = 0; i < 8; i++) R(g, x + 1 + i, y + 25 - i * 2, 1, 2, 3);
+  R(g, x + 7, y + 15, 2, 3, 0); R(g, x + 7, y + 16, 2, 1, 3);
+}
+function drawLamp(g, x, y) { // base at (x, y); 8 wide, 44 tall
+  R(g, x + 3, y - 40, 2, 40, 3); R(g, x + 2, y - 3, 4, 3, 3); R(g, x + 1, y - 44, 6, 4, 3); R(g, x + 2, y - 43, 4, 2, 0); R(g, x + 3, y - 47, 2, 3, 3);
+}
+
+/* =====================================================================
+   ENGINE
+   ===================================================================== */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const IMG = {};
+let debug = CONFIG.DEBUG;
+
+/* ---------- input ---------- */
+const keys = {}, hit = {}; const order = [];
+const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right',
+  W: 'up', S: 'down', A: 'left', D: 'right', z: 'A', Z: 'A', ' ': 'A', x: 'B', X: 'B', Enter: 'start', c: 'debug', C: 'debug', m: 'mute', M: 'mute' };
+function press(k) { initAudio(); if (!keys[k]) { hit[k] = true; if (['up', 'down', 'left', 'right'].includes(k)) order.push(k); } keys[k] = true; }
+function release(k) { keys[k] = false; const i = order.indexOf(k); if (i >= 0) order.splice(i, 1); }
+addEventListener('keydown', e => { const k = KEYMAP[e.key]; if (k) { e.preventDefault(); press(k); } });
+addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k) { e.preventDefault(); release(k); } });
+function heldDir() { for (let i = order.length - 1; i >= 0; i--) if (keys[order[i]]) return order[i]; return null; }
+
+/* ---------- gentle audio ---------- */
+let AC = null, master = null, muted = false;
+function initAudio() {
+  if (AC) return; try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = 1; master.connect(AC.destination); if (CONFIG.MUSIC) startMusic(); } catch (e) { AC = null; }
+}
+function tone(f, dur, type = 'square', vol = 0.02, when = 0) {
+  if (!AC || muted) return; const t = AC.currentTime + when, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+}
+const sfx = { blip: () => tone(880, 0.03, 'square', 0.008), select: () => tone(660, 0.06, 'square', 0.02), move: () => tone(520, 0.04, 'square', 0.012) };
+/* Piano demo: J.S. Bach, Polonaise in G minor (from Fred's score), bars 1-8.
+   HOW TO CHANGE A NOTE:  each item is [length, pitch].
+     length: 1 = 16th note, 2 = 8th, 4 = quarter, 8 = half, 12 = dotted half
+     pitch (MIDI number): 60 = middle C. +1 = up a semitone, -1 = down a semitone, +12 = up an octave.
+       C4=60 C#4=61 D4=62 Eb4=63 E4=64 F4=65 F#4=66 G4=67 Ab4=68 A4=69 Bb4=70 B4=71 C5=72 D5=74 Eb5=75
+       G3=55 A3=57 Bb3=58 F#3=54 Eb3=51 D3=50 C3=48 Bb2=46 G2=43 D2=38
+     chord: put pitches in brackets, e.g. [2, [69, 66]] = A4 + F#4 together for an 8th.
+     rest:  use 0 as the pitch, e.g. [4, 0].
+   BAR1 / BAR2 / BAR3 = right-hand bars 1, 2, 3 (reused for bars 5, 6, 7). RH = whole right hand.
+   LB1 / LB2 / LB3   = left-hand bars 1, 2, 3 (reused for bars 5, 6, 7).  LH = whole left hand. */
+const PIANO_16TH = 0.13;   // seconds per 16th note (Allegretto)
+const BAR1 = [[1, 67], [1, 69], [2, 70], [1, 69], [1, 66], [2, 67], [4, 63]];
+const BAR2 = [[1, 67], [1, 69], [2, 70], [1, 69], [1, 66], [2, 67], [4, 62]];
+const BAR3 = [[2, 74], [1, 74], [1, 67], [2, [75, 72]], [2, [74, 70]], [2, [72, 69]], [2, [70, 67]]];
+const RH = [...BAR1, ...BAR2, ...BAR3, [2, [69, 66]], [1, [69, 66]], [1, [70, 67]], [8, [69, 66, 62]],
+            ...BAR1, ...BAR2, ...BAR3, [2, [69, 66]], [1, 67], [1, 66], [8, [67, 62, 58]]];
+const LB1 = [[1, 55], [1, 57], [2, 58], [1, 57], [1, 54], [2, 55], [4, 51]];
+const LB2 = [[1, 55], [1, 57], [2, 58], [1, 57], [1, 54], [2, 55], [4, 50]];
+const LB3 = [[4, [46, 55]], [4, 48], [4, 48]];
+const LH = [...LB1, ...LB2, ...LB3, [4, 50], [1, 50], [1, 48], [1, 50], [1, 52], [1, 54], [1, 52], [1, 54], [1, 50],
+            ...LB1, ...LB2, ...LB3, [2, 50], [2, 38], [2, 43], [1, 46], [1, 50], [4, 55]];
+let musicPaused = false;
+const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+function pianoNote(m, when, dur, vol) {   // a soft piano-like note (quick attack, fading tail)
+  tone(midiHz(m), Math.max(0.25, dur * 1.6), 'triangle', vol, when); tone(midiHz(m) * 2, dur * 0.5, 'sine', vol * 0.25, when);
+}
+/* Day 2 piece (Eason's song, from Fred's score): bars 1-5, up to the double bar line. E major, 4/4.
+   Same format: [length in 16th notes, MIDI note(s)], 0 = rest. */
+const EASON_16TH = 0.24;   // seconds per 16th note (bigger = slower)
+const EASON_RH = [[1, 0], [1, 87], [2, 85], [2, 83], [2, 81], [8, 80],                                   // bar 1
+  [1, [68, 71, 75]], [7, 0], [1, 71], [1, 71], [1, 76], [1, 71], [1, 78], [1, 71], [1, 80], [1, 71],     // bar 2
+  [4, 75], [4, 71], [2, 71], [1, 76], [1, 71], [1, 78], [1, 71], [1, 80], [1, 71],                      // bar 3
+  [4, 75], [4, 73], [1, 73], [1, 64], [1, 68], [1, 64], [1, 69], [1, 64], [1, 73], [1, 64],             // bar 4
+  [4, 75], [4, 71], [8, 66]];                                                                           // bar 5
+const EASON_LH = [[3, 78], [1, 75], [3, 75], [1, 73], [8, 73],
+  [4, 57], [2, 64], [2, 57], [4, 57], [4, 57],
+  [12, 59], [4, 59],
+  [6, 57], [2, 57], [4, 57], [4, 57],
+  [6, 59], [2, 59], [6, 59], [2, 59]];
+async function playPiano(rh = RH, lh = LH, step = PIANO_16TH) {
+  musicPaused = true; let total = 0;
+  for (const [hand, vol] of [[rh, 0.05], [lh, 0.035]]) { let t = 0;
+    for (const [n, notes] of hand) { const d = n * step; for (const m of [].concat(notes)) if (m) pianoNote(m, t, d, vol); t += d; }
+    total = Math.max(total, t); }
+  await sleep(total * 1000 + 500); musicPaused = false;
+}
+/* ---------- DREAM / ENDING MUSIC: Hans Zimmer, "Cornfield Chase" (from Fred's score), 3/4 at 96 bpm ----------
+   Written bar by bar as 12 sixteenth notes per hand (or longer notes as [length, pitch]).
+   MIDI numbers: 60 = middle C, +12 = up an octave. Change BG_BPM to change the speed. */
+const BG_BPM = 96;
+const N = { F2: 41, G2: 43, A2: 45, C3: 48, D3: 50, E3: 52, F3: 53, G3: 55, A3: 57, B3: 59, C4: 60, D4: 62, E4: 64, F4: 65, G4: 67,
+  A4: 69, B4: 71, C5: 72, D5: 74, E5: 76, F5: 77, G5: 79, A5: 81, B5: 83, C6: 84, D6: 86, E6: 88 };
+function buildCornfield() {
+  const RH = [], LH = [];                       // each entry: [start (16ths), length (16ths), [pitches]]
+  let bar = 0; const at = b => b * 12;
+  const add = (L, b, pos, len, p) => L.push([at(b) + pos, len, [].concat(p)]);
+  const arp = (b, r, a, c, o) => [r, a, c, o, c, a, r, a, c, o, c, a].forEach((p, i) => add(LH, b, i, 1, p));
+  // bars 1-8: slow theme over held chords
+  const top = ['A4', 'A4', 'B4', 'B4', 'C5', 'C5', 'D5', 'D5'], lhc = [['F3', 'A3'], ['F3', 'A3'], ['G3', 'B3'], ['G3', 'B3'], ['A3', 'C4'], ['A3', 'C4'], ['G3', 'B3'], ['G3', 'B3']];
+  for (let b = 0; b < 8; b++) { add(RH, b, 0, 4, N[top[b]]); if (b < 7) add(RH, b, 4, 8, N.E5); else { add(RH, b, 4, 4, N.E5); add(RH, b, 8, 4, N.B4); }
+    for (let k = 0; k < 3; k++) add(RH, b, k * 4, 4, N.E4); add(LH, b, 0, 12, lhc[b].map(n => N[n])); }
+  // bars 9-16: eighth-note pulse
+  const t2 = ['A4', 'A4', 'B4', 'B4', 'C5', 'C5', 'D5', 'D5'], l2 = [['F2', 'C3', 'A3'], ['G2', 'D3', 'B3'], ['A2', 'E3', 'C4'], ['G2', 'D3', 'B3']];
+  for (let b = 8; b < 16; b++) { const i = b - 8; [[0, t2[i]], [2, 'E5'], [4, 'E5'], [6, 'E5'], [10, 'E5']].forEach(([p, n]) => add(RH, b, p, 2, N[n]));
+    for (let k = 0; k < 3; k++) add(RH, b, k * 4, 4, N.E4); add(LH, b, 0, 12, l2[i >> 1].map(n => N[n])); }
+  // bars 17-21: light staccato sixteenths over E-F ripple
+  const g17 = [['A4', 'C5', 'E5', 'A5']], gB = ['B4', 'D5', 'E5', 'B5'], gA = ['A4', 'C5', 'E5', 'A5'], gG = ['G4', 'B4', 'E5', 'G5'], gG2 = ['G4', 'B4', 'D5', 'G5'];
+  const b17 = [[gA, gA, gA], [gB, gB, gB], [gB, gB, gB], [gA, gG, gA], [gB, gA, gG2]];
+  b17.forEach((grp, i) => { const b = 16 + i; grp.flat().forEach((n, k) => add(RH, b, k, 1, N[n])); for (let k = 0; k < 12; k++) add(LH, b, k, 1, k & 1 ? N.F4 : N.E4); });
+  // bars 22-27: octave chords over arpeggios
+  const c22 = [['A4', 'E5', 'A4'], ['A4', 'E5', 'A4'], ['B4', 'E5', 'B4'], ['B4', 'E5', 'B4'], ['C5', 'E5', 'C5'], ['C5', 'E5', 'C5']];
+  const a22 = [['F3', 'A3', 'C4', 'F4'], ['F3', 'A3', 'C4', 'F4'], ['G3', 'B3', 'D4', 'G4'], ['G3', 'B3', 'D4', 'G4'], ['A3', 'C4', 'E4', 'A4'], ['A3', 'C4', 'E4', 'A4']];
+  c22.forEach((ch, i) => { const b = 21 + i; ch.forEach((n, k) => add(RH, b, k * 4, 4, [N[n], N[n] + 12])); arp(b, ...a22[i].map(n => N[n])); });
+  // bars 28-35: running sixteenths (and 36-43 the same an octave higher)
+  const run = ['C5 D5 E5 F5 E5 D5 E5 C5 D5 E5 F5 G5', 'D5 E5 F5 G5 A5 G5 F5 E5 F5 G5 A5 B5', 'C6 B5 A5 B5 G5 A5 B5 E5 B5 G5 A5 G5',
+    'A5 B5 D6 E5 G5 A5 B5 G5 A5 B5 D6 E5', 'C6 B5 C6 A5 B5 C6 D6 A5 C6 B5 C6 A5', 'B5 C6 D6 A5 C6 B5 C6 A5 E5 C6 B5 C6',
+    'A5 B5 C6 D6 C6 B5 C6 D6 E6 B5 C6 D6', 'E6 B5 C6 D6 E6 B5 C6 D6 E6 D6 C6 B5'];
+  const rl = [['F3', 'A3', 'C4', 'F4'], ['F3', 'A3', 'C4', 'F4'], ['G3', 'B3', 'D4', 'G4'], ['G3', 'B3', 'D4', 'G4'],
+    ['A3', 'C4', 'E4', 'A4'], ['A3', 'C4', 'E4', 'A4'], ['G3', 'B3', 'D4', 'G4'], ['G3', 'B3', 'D4', 'G4']];
+  for (const [b0, up] of [[27, 0], [35, 12]]) run.forEach((line, i) => { const b = b0 + i;
+    line.split(' ').forEach((n, k) => add(RH, b, k, 1, N[n] + up)); arp(b, ...rl[i].map(n => N[n])); });
+  // bars 44-62: big ostinato section, then the last note
+  const pat = { F: ['A5', 'F5', 'E5', 'C5'], G: ['B5', 'G5', 'E5', 'D5'], A: ['C6', 'A5', 'E5', 'C5'], D: ['D6', 'G5', 'E5', 'D5'] };
+  const bl = { F: ['F2', 'C3', 'E3', 'A3'], G: ['G2', 'D3', 'G3', 'B3'], A: ['A2', 'C3', 'E3', 'A3'], D: ['G2', 'D3', 'G3', 'B3'] };
+  'FFGGAADDFFGGAAGGAFD'.split('').forEach((c, i) => { const b = 43 + i;
+    for (let k = 0; k < 12; k++) add(RH, b, k, 1, N[pat[c][k & 3]]); arp(b, ...bl[c].map(n => N[n])); });
+  add(RH, 62, 0, 4, N.B4); add(LH, 62, 0, 4, N.G2);
+  return { RH, LH, length: at(64) };
+}
+let BG = null;   // the background song that is playing (null = none)
+function bgNote(dest, f, when, dur, vol) {
+  const o = AC.createOscillator(), g = AC.createGain(); o.type = 'triangle'; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(vol, when + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, when + Math.max(0.2, dur * 1.5));
+  o.connect(g); g.connect(dest); o.start(when); o.stop(when + Math.max(0.2, dur * 1.5) + 0.05);
+}
+function playBG() {   // start "Cornfield Chase" from the beginning
+  if (!AC) return; stopBG(0.05); musicPaused = true;
+  const song = buildCornfield(), sx = 60 / BG_BPM / 4, out = AC.createGain(); out.gain.value = 1; out.connect(master);
+  const evs = [...song.RH.map(e => [...e, 0.045 * CONFIG.BG_VOLUME]), ...song.LH.map(e => [...e, 0.03 * CONFIG.BG_VOLUME])].sort((a, b) => a[0] - b[0]);
+  const t0 = AC.currentTime + 0.1; let i = 0;
+  const timer = setInterval(() => { if (muted) return; const now = AC.currentTime;
+    while (i < evs.length && t0 + evs[i][0] * sx < now + 0.4) { const [st, len, ps, vol] = evs[i++]; const when = Math.max(now, t0 + st * sx);
+      for (const p of ps) bgNote(out, midiHz(p), when, len * sx, vol); }
+    if (i >= evs.length) clearInterval(timer); }, 60);
+  BG = { out, timer };
+}
+function stopBG(sec = 1) {   // fade the background song away over 'sec' seconds
+  if (!BG || !AC) return; const { out, timer } = BG; BG = null; clearInterval(timer);
+  const now = AC.currentTime; out.gain.cancelScheduledValues(now); out.gain.setValueAtTime(Math.max(0.0001, out.gain.value), now); out.gain.exponentialRampToValueAtTime(0.0001, now + sec);   // smooth, steadily quieter
+  setTimeout(() => { out.disconnect(); }, sec * 1000 + 100);
+}
+const fadeSec = ms => (3 * ms + 60) / 1000;
+function startMusic() { // soft, slow triangle lullaby
+  const mel = [64, 0, 67, 0, 69, 67, 64, 0, 62, 0, 64, 0, 60, 0, 0, 0, 64, 0, 67, 0, 72, 71, 69, 0, 67, 0, 64, 0, 62, 0, 0, 0];
+  const bass = [48, 43, 45, 43, 48, 43, 41, 43]; let i = 0;
+  setInterval(() => { if (!AC || muted || musicPaused) { i++; return; } const n = mel[i % mel.length];
+    if (n) tone(440 * Math.pow(2, (n - 69) / 12), 0.5, 'triangle', 0.025);
+    if (i % 4 === 0) tone(440 * Math.pow(2, (bass[(i / 4) % bass.length] - 69) / 12), 1.4, 'triangle', 0.02); i++; }, 380);
+}
+
+/* ---------- state ---------- */
+const G = { mode: 'lang', langSel: 0, day: 1, seen: {}, scene: null, sid: null, fred: null, actors: [], cam: { x: 0, y: 0 },
+  busy: false, t: 0, fade: 0, fadeTo: 3, cut: null, puzzle: null, flags: {}, hideFred: false };
+
+/* ---------- dialogue box & choices ---------- */
+let ui = null;
+function wrap(s, max) {   // max = characters per line (English). Chinese characters count double.
+  const limit = max * 6, toks = s.match(/[\u2e80-\uffff]|[^\s\u2e80-\uffff]+|\s+/g) || [], lines = []; let cur = '';
+  for (const tk of toks) { if (/^\s+$/.test(tk)) { if (cur) cur += ' '; continue; }
+    if (cur && textWidth(cur + tk) > limit) { lines.push(cur.trimEnd()); cur = tk; } else cur += tk; }
+  if (cur.trim()) lines.push(cur.trimEnd()); return lines;
+}
+// show one text; if opts given, show a choice menu. Resolves with chosen index (or -1 if cancelled)
+const SAFE = { '…': '...', '—': '-', '–': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '\u00a0': ' ' };
+function clean(s) { return [...s].map(ch => SAFE[ch] ?? ch).filter(ch => isWide(ch) || FONT[ch] || ch === ' ').join(''); }   // no more ??? for unknown symbols
+function showText(s, opts, cancellable) {
+  s = clean(s); if (opts) opts = opts.map(clean);
+  return new Promise(res => { const lines = wrap(s, 24), pages = [];
+    for (let i = 0; i < lines.length; i += 3) pages.push(lines.slice(i, i + 3));
+    ui = { pages, page: 0, n: 0, opts: opts || null, sel: 0, cancel: !!cancellable, res, tick: 0,
+      top: G.mode === 'map' && G.fred && (G.fred.y - G.cam.y) > 70 }; });  // box moves to the top if Fred is low on screen
+}
+async function say(arr) { for (const s of arr) await showText(s); }
+const ask = (q, opts, cancellable = true) => showText(q, opts, cancellable);
+function updateUI() {
+  const u = ui, page = u.pages[u.page], total = [...page.join('')].length, last = u.page === u.pages.length - 1;
+  if (u.n < total) { if (++u.tick >= CONFIG.TEXT_SPEED) { u.tick = 0; u.n++; if (u.n % 2) sfx.blip(); } if (hit.A) u.n = total; return; }
+  if (u.opts && last) {
+    if (hit.up && u.opts.length > 1) { u.sel = (u.sel + u.opts.length - 1) % u.opts.length; sfx.move(); }
+    if (hit.down && u.opts.length > 1) { u.sel = (u.sel + 1) % u.opts.length; sfx.move(); }
+    if (hit.A) { sfx.select(); ui = null; u.res(u.sel); }
+    else if (hit.B && u.cancel) { sfx.select(); ui = null; u.res(-1); }
+    return;
+  }
+  if (hit.A) { sfx.select(); if (last) { ui = null; u.res(0); } else { u.page++; u.n = 0; } }
+}
+function drawUI() {
+  if (!ui) return; const u = ui, page = u.pages[u.page], by = u.top ? 0 : 100;
+  box(ctx, 0, by, 160, 44, 3, 3); box(ctx, 2, by + 2, 156, 40, 0, 3); R(ctx, 3, by + 3, 154, 1, 1);
+  let left = u.n;
+  const lh = LANG === 'zh' ? 12 : 10;
+  page.forEach((ln, i) => { const s = [...ln].slice(0, Math.max(0, left)).join(''); left -= [...ln].length; text(ctx, s, 8, by + (LANG === 'zh' ? 9 : 8) + i * lh); });
+  const done = u.n >= [...page.join('')].length, last = u.page === u.pages.length - 1;
+  if (done && !(u.opts && last) && (G.t >> 4) & 1) text(ctx, '~', 146, by + 33, 3);
+  if (done && u.opts && last) {
+    const w = Math.max(...u.opts.map(o => textWidth(o))) + 18, h = u.opts.length * 12 + 8, x = 158 - w, y = u.top ? 46 : 98 - h;
+    box(ctx, x, y, w, h, 0, 3); R(ctx, x + 1, y + 1, w - 2, 1, 1);
+    u.opts.forEach((o, i) => { text(ctx, o, x + 12, y + 6 + i * 12); if (i === u.sel) text(ctx, '>', x + 4, y + 6 + i * 12); });
+  }
+}
+
+/* ---------- fades: shifts all 4 shades toward white or black (true GB style). ms = time per step ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function fadeOut(to = 3, ms = 90) { G.fadeTo = to; for (let i = 1; i <= 3; i++) { G.fade = i; await sleep(ms); } await sleep(60); }
+async function fadeIn(ms = 90) { for (let i = 2; i >= 0; i--) { G.fade = i; await sleep(ms); } }
+function shadeOf(r, g, b) { const s = r + g + b; return s > 560 ? 0 : s > 336 ? 1 : s > 148 ? 2 : 3; }
+function darken(y0 = 0) {   // the dream is seen through a darker filter (rows y0 and below)
+  if (y0 >= H) return; const im = ctx.getImageData(0, y0, W, H - y0), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { const c = PAL_RGB[Math.min(3, shadeOf(d[i], d[i + 1], d[i + 2]) + 1)]; d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; }
+  ctx.putImageData(im, 0, y0);
+}
+function applyFade() {
+  if (!G.fade) return; const im = ctx.getImageData(0, 0, W, H), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { let s = shadeOf(d[i], d[i + 1], d[i + 2]);
+    s = G.fadeTo === 3 ? Math.min(3, s + G.fade) : Math.max(0, s - G.fade); const c = PAL_RGB[s]; d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; }
+  ctx.putImageData(im, 0, 0);
+}
+
+/* ---------- map scenes ---------- */
+function solidAt(tx, ty) {
+  const sc = G.scene; if (tx < 0 || ty < 0 || tx >= sc.w || ty >= sc.h) return true;
+  if (sc.grid) return sc.grid[ty][tx] === '#';
+  return sc.solid.includes(sc.map[ty][tx]);
+}
+function hidden(a) { return G.day === 2 && CONFIG.HIDE_ON_DAY2.includes(a.id); }
+function feet(e) { return { x: e.x + 4, y: e.y + 10, w: 8, h: 6 }; }
+function boxFree(b, self) {
+  for (const [px, py] of [[b.x, b.y], [b.x + b.w - 1, b.y], [b.x, b.y + b.h - 1], [b.x + b.w - 1, b.y + b.h - 1]])
+    if (solidAt(Math.floor(px / 8), Math.floor(py / 8))) return false;
+  for (const a of G.actors) { if (a === self || a.kind === 'haile' || a.follow || hidden(a) || self !== G.fred) continue;
+    const f = { x: a.x + 3, y: a.y + 10, w: 10, h: 6 };
+    if (b.x < f.x + f.w && b.x + b.w > f.x && b.y < f.y + f.h && b.y + b.h > f.y) return false; }
+  return true;
+}
+function tryMove(e, dx, dy) {
+  let moved = false; const f = feet(e);
+  if (dx && boxFree({ ...f, x: f.x + dx }, e)) { e.x += dx; moved = true; }
+  const f2 = feet(e); if (dy && boxFree({ ...f2, y: f2.y + dy }, e)) { e.y += dy; moved = true; }
+  return moved;
+}
+const placeFromTile = (tx, ty) => ({ x: tx * 8 + 4 - 8, y: ty * 8 + 4 - 13 });
+async function loadScene(id, spawn, fadeMs = 90) {
+  const sc = SCENES[id]; G.sid = id; G.scene = sc; G.mode = 'map'; G.hideFred = false; G.flags.poo = false; G.flags.streetPee = false; G.flags.streetEnd = false; G.pooAt = null; G.trail = null;
+  const sp = sc.spawns[spawn] || Object.values(sc.spawns)[0], p = placeFromTile(sp[0], sp[1]);
+  G.fred = { id: 'fred', x: p.x, y: p.y, dir: sp[2], frame: 0, step: 0, moving: false };
+  G.actors = sc.actors.map(a => { const q = placeFromTile(a.x, a.y);
+    return { ...a, x: q.x, y: q.y, dir: a.dir || 'down', frame: 0, step: 0, timer: 60, mdir: null, offx: 0, offy: 0 }; });
+  if (id === 'street') { // Haile on the leash ahead, Daidai behind
+    G.actors.push({ id: 'haile', kind: 'haile', follow: 'ahead', x: G.fred.x + 18, y: G.fred.y, dir: 'right', frame: 0, step: 0, offx: 0, offy: 0 });
+    G.actors.push({ id: 'daidai', kind: 'person', look: 'daidai', follow: 'behind', x: G.fred.x - 16, y: G.fred.y - 2, dir: 'right', frame: 0, step: 0, offx: 0, offy: 0 });
+    G.trail = []; for (let i = 0; i < 20; i++) G.trail.push({ x: G.fred.x - 20 + i, y: G.fred.y - 2 });
+  }
+  updateCamera(); await fadeIn(fadeMs);
+}
+async function goTo(id, spawn) { G.busy = true; await fadeOut(3); await loadScene(id, spawn); G.busy = false;
+  if (id === 'yard' && G.day === 2) runScript(SCRIPTS.toGate); }
+function updateCamera() {
+  const sc = G.scene, mw = sc.w * 8, mh = sc.h * 8, f = G.fred;
+  G.cam.x = mw <= W ? -Math.floor((W - mw) / 2) : Math.max(0, Math.min(mw - W, Math.round(f.x + 8 - W / 2)));
+  G.cam.y = mh <= H ? -Math.floor((H - mh) / 2) : Math.max(0, Math.min(mh - H, Math.round(f.y + 8 - H / 2)));
+}
+function inRect(tx, ty, r) { return tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h; }
+
+function updateMap() {
+  const f = G.fred; f.moving = false;
+  const canMove = !G.busy && !ui && !G.puzzle;
+  if (canMove) {
+    let d = heldDir(); if (G.sid === 'street' && d !== 'right') d = null;   // on the walk you can only go right
+    if (d && G.sid === 'street' && (f.sub = (f.sub || 0) + 1) % CONFIG.STREET_SPEED) d = null;   // slower walk on the street
+    if (d) { f.dir = d; const dx = d === 'left' ? -1 : d === 'right' ? 1 : 0, dy = d === 'up' ? -1 : d === 'down' ? 1 : 0;
+      if (tryMove(f, dx, dy)) { f.moving = true; f.lastMove = G.t; if (G.trail) { G.trail.push({ x: f.x, y: f.y - 2 }); if (G.trail.length > 40) G.trail.shift(); } } }
+    if (hit.A) interact();
+  }
+  if (G.sid === 'street' && keys.right && G.t - (f.lastMove || 0) < 3) f.moving = true;   // keep legs moving between slow steps
+  if (f.auto) f.moving = true;
+  if (f.moving) { f.step++; f.frame = [1, 0, 2, 0][(f.step >> 3) & 3]; } else f.frame = 0;
+  for (const a of G.actors) { if (hidden(a)) continue; a.moving = false;
+    if (a.wander && !a.talking && !G.busy) wander(a);
+    if (a.follow === 'ahead') { const tx = Math.max(0, Math.min(G.scene.w * 8 - 16, f.x + 22)), ty = f.y + 1;
+      if (!a.stopped) { const dx = Math.sign(tx - a.x), dy = Math.sign(ty - a.y);
+        if (tx !== a.x || ty !== a.y) { a.x += dx * Math.min(G.sid === 'street' ? 0.7 : 1.25, Math.abs(tx - a.x)); a.y += dy * Math.min(1, Math.abs(ty - a.y)); a.moving = true; }
+        if (dx) a.dir = dx > 0 ? 'right' : 'left'; } }
+    if (a.follow === 'behind' && G.trail.length) { const p = G.trail[Math.max(0, G.trail.length - 18)]; if (p.x !== a.x || p.y !== a.y) { a.moving = true; a.dir = p.x > a.x ? 'right' : p.x < a.x ? 'left' : a.dir; } a.x = p.x; a.y = p.y; }
+    if (a.moving || a.walkAnim) { a.step++; a.frame = [1, 0, 2, 0][(a.step >> 3) & 3]; } else a.frame = 0;
+  }
+  if (!G.busy && !ui) {   // walk-in doors and street triggers
+    const fb = feet(f), tx = Math.floor((fb.x + 4) / 8), ty = Math.floor((fb.y + 3) / 8), sc = G.scene;
+    for (const d of sc.doors) if (inRect(tx, ty, d)) { goTo(d.go, d.spawn); break; }
+    for (const tr of sc.walkTriggers || []) if (inRect(tx, ty, tr) && !G.flags[tr.id]) { G.flags[tr.id] = true; runScript(SCRIPTS[tr.id]); break; }
+    if (G.sid === 'yard' && G.day === 2) { const at = tx <= 1 && ty >= 4 && ty <= 7;   // back at the gate -> ask again
+      if (at && !G.flags.atGate) runScript(SCRIPTS.gate); G.flags.atGate = at; }
+    if (sc.sink && G.flags.dumped && !G.flags.washed) { const inS = inRect(tx, ty, sc.sink);   // ask once each time Fred walks past the sink
+      if (inS && !G.flags.inSink) runScript(SCRIPTS.wash); G.flags.inSink = inS; }
+  }
+  updateCamera();
+}
+function wander(a) {
+  if (--a.timer <= 0) { const r = Math.random(); a.mdir = r < 0.35 ? null : ['up', 'down', 'left', 'right'][Math.floor(Math.random() * 4)]; a.timer = 40 + Math.floor(Math.random() * 90); }
+  if (!a.mdir) return; a.dir = a.mdir; a.sub = (a.sub || 0) + 1; if (a.sub % 2) return;
+  const dx = a.dir === 'left' ? -1 : a.dir === 'right' ? 1 : 0, dy = a.dir === 'up' ? -1 : a.dir === 'down' ? 1 : 0, b = a.wander;
+  const nx = a.x + dx, ny = a.y + dy, fx = nx + 8, fy = ny + 13;
+  if (fx < b[0] * 8 || fx > (b[2] + 1) * 8 || fy < b[1] * 8 || fy > (b[3] + 1) * 8) { a.mdir = null; return; }
+  const fr = G.fred; if (Math.abs(nx - fr.x) < 10 && Math.abs(ny - fr.y) < 8) { a.mdir = null; return; }
+  if (tryMove(a, dx, dy)) a.moving = true; else a.mdir = null;
+}
+function interact() {
+  const f = G.fred, dv = { up: [0, -10], down: [0, 10], left: [-10, 0], right: [10, 0] }[f.dir];
+  const px = f.x + 8 + dv[0], py = f.y + 13 + dv[1];
+  for (const a of G.actors) { if (hidden(a) || a.follow) continue;
+    if (px >= a.x + 1 && px < a.x + 15 && py >= a.y + 2 && py < a.y + 17) { runScript(SCRIPTS[a.id], a); return; } }
+  const tx = Math.floor(px / 8), ty = Math.floor(py / 8);
+  for (const h of G.scene.hotspots) if ((!h.day || h.day === G.day) && inRect(tx, ty, h)) { runScript(SCRIPTS[h.id], h); return; }
+  // not facing anything: things marked "near" work from any side when Fred stands next to them
+  { const fb = feet(f), x0 = Math.floor(fb.x / 8), x1 = Math.floor((fb.x + fb.w - 1) / 8), y0 = Math.floor(fb.y / 8), y1 = Math.floor((fb.y + fb.h - 1) / 8);
+    for (const h of G.scene.hotspots) if (h.near && (!h.day || h.day === G.day) &&
+      x1 >= h.x - 1 && x0 <= h.x + h.w && y1 >= h.y - 1 && y0 <= h.y + h.h) { runScript(SCRIPTS[h.id], h); return; } }
+  // not facing anything: talk to whoever is right next to Fred, from any side
+  let best = null, bd = 1e9; const fx = f.x + 8, fy = f.y + 12;
+  for (const a of G.actors) { if (hidden(a) || a.follow) continue;
+    const dx = a.x + 8 - fx, dy = a.y + 12 - fy, d = dx * dx + dy * dy;
+    if (Math.abs(dx) <= 18 && Math.abs(dy) <= 16 && d < bd) { bd = d; best = a; } }
+  if (best) { const dx = best.x - f.x, dy = best.y - f.y;
+    f.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); runScript(SCRIPTS[best.id], best); }
+}
+async function runScript(fn, arg) {
+  if (!fn) return; G.busy = true;
+  if (arg && arg.kind) { arg.talking = true; arg.mdir = null; const f = G.fred;  // Haile turns to face Fred
+    const dx = f.x - arg.x, dy = f.y - arg.y;
+    if (!arg.follow) arg.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); }
+  try { await fn(arg); } finally { if (arg) arg.talking = false; if (!G.flags.ending) G.busy = false; }
+}
+
+/* ---------- drawing a map scene ---------- */
+function sprOf(a) {
+  if (a.kind === 'haile') { const s = SPR.haile; return (a.dir === 'up' ? s.up[0] : a.dir === 'down' ? s.down[0] : s[a.dir][a.frame]); }
+  const s = SPR[a.look || a.id]; return s[a.dir][a.frame];
+}
+function drawMap() {
+  const sc = G.scene, cx = G.cam.x, cy = G.cam.y; R(ctx, 0, 0, W, H, 3);
+  const bg = sc.image ? IMG[sc.image] : IMG[sc.draw]; ctx.drawImage(bg, -cx, -cy);
+  for (const [n, x, y, d1] of sc.decor) if (!(d1 && G.day === 2)) ctx.drawImage(SPR[n], x - cx, y - cy);
+  if (G.sid === 'livingroom' && G.day === 2) {   // after Haile passes: water bowl and the leash on the desk are gone
+    ctx.drawImage(bg, 18, 116, 16, 9, 34 - cx, 116 - cy, 16, 9);   // floor copied over the water bowl
+    R(ctx, 17 - cx, 59 - cy, 14, 7, 1); R(ctx, 17 - cx, 66 - cy, 14, 2, 2);   // plain desk over the leash
+    R(ctx, 157 - cx, 92 - cy, 7, 8, 1);                                        // wine glass gone
+  }
+  const list = [];   // depth-sorted things
+  if (G.sid === 'yard') list.push({ by: 12 * 8 + 22, draw: () => drawThrower(ctx, 22 * 8 - cx, 11 * 8 - 6 - cy) });
+  if (G.sid === 'yard' && G.day === 2) list.push({ by: 0, draw: () => drawGate(ctx, -cx, 30 - cy) });
+  if (G.pianoFred) list.push({ by: 60, draw: () => {   // Fred on the stool (seen from behind), arms reaching up to the keys
+    const ox = 72 - cx, oy = 46 - cy, k = G.t >> 3;
+    if (G.pianoDone === 'right') { ctx.drawImage(SPR.fred.right[0], ox, oy); return; }   // sitting, turned towards Mary
+    if (G.pianoDone === 'rest') { ctx.drawImage(SPR.fred.up[0], ox, oy); return; }      // sitting, hands back by his sides
+    const lh = 69 + [0, 2, 4, 1, 3, 5][k % 6], rh = 84 + [3, 0, 5, 2, 6, 1][(k >> 1) % 6], ly = 44 + ((k >> 1) & 1), ry = 44 + (k & 1);
+    ctx.drawImage(SPR.fredPlay, ox, oy);
+    for (const [sx, hx, hy] of [[ox + 2, lh - cx, ly - cy], [ox + 13, rh - cx, ry - cy]]) {   // arms: shoulder -> hand on the keyboard
+      const sy = oy + 10, n = Math.max(Math.abs(hx - sx), Math.abs(hy - sy));
+      for (let i = 0; i <= n; i++) R(ctx, Math.round(sx + (hx - sx) * i / n), Math.round(sy + (hy - sy) * i / n), 2, 1, 2);
+      R(ctx, hx - 1, hy - 1, 4, 3, 3); R(ctx, hx, hy, 2, 1, 1); } } });
+    if (sc.lamps) for (const lx of sc.lamps) list.push({ by: 15 * 8, draw: () => drawLamp(ctx, lx * 8 - cx, 15 * 8 - 1 - cy) });
+  if (G.pooAt) list.push({ by: G.pooAt.y + 6, draw: () => ctx.drawImage(SPR.poo, G.pooAt.x - cx, G.pooAt.y - cy) });
+  for (const a of G.actors) if (!hidden(a)) list.push({ by: a.y + 15, draw: () => ctx.drawImage(sprOf(a), Math.round(a.x + a.offx - cx), Math.round(a.y - a.offy - cy)) });
+  const f = G.fred; if (!G.hideFred) list.push({ by: f.y + 15.5, draw: () => ctx.drawImage(SPR.fred[f.dir][f.frame], Math.round(f.x - cx), Math.round(f.y - cy)) });
+  if (G.sid === 'street') { const h = G.actors.find(a => a.follow === 'ahead'); // the leash line
+    if (h) list.push({ by: 999, draw: () => { const x0 = f.x + 12, y0 = f.y + 12, x1 = h.x + (h.dir === 'left' ? 12 : 4), y1 = h.y + 7;
+      const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) | 0; for (let i = 0; i <= n; i++) { const t = n ? i / n : 0, sag = Math.sin(Math.PI * t) * 2;
+        R(ctx, Math.round(x0 + (x1 - x0) * t - cx), Math.round(y0 + (y1 - y0) * t + sag - cy), 1, 1, 3); } } }); }
+  if (G.bedFred) list.push({ by: 999, draw: () => { ctx.drawImage(SPR.fred.down[0], 21 - cx, 34 - cy); box(ctx, 16 - cx, 45 - cy, 26, 13, 1, 3); R(ctx, 17 - cx, 47 - cy, 24, 1, 0); } });
+  list.sort((a, b) => a.by - b.by).forEach(o => o.draw());
+  if (debug) drawDebug();
+}
+function drawDebug() {
+  const sc = G.scene, cx = G.cam.x, cy = G.cam.y; ctx.globalAlpha = 0.35;
+  for (let y = 0; y < sc.h; y++) for (let x = 0; x < sc.w; x++) if (solidAt(x, y)) { ctx.fillStyle = '#f00'; ctx.fillRect(x * 8 - cx, y * 8 - cy, 8, 8); }
+  ctx.fillStyle = '#00f'; for (const d of sc.doors.concat(sc.walkTriggers || [])) ctx.fillRect(d.x * 8 - cx, d.y * 8 - cy, d.w * 8, d.h * 8);
+  ctx.fillStyle = '#ff0'; for (const d of sc.hotspots) ctx.fillRect(d.x * 8 - cx, d.y * 8 - cy, d.w * 8, d.h * 8);
+  ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  for (let x = 0; x <= sc.w; x++) { ctx.beginPath(); ctx.moveTo(x * 8 - cx + 0.5, -cy); ctx.lineTo(x * 8 - cx + 0.5, sc.h * 8 - cy); ctx.stroke(); }
+  for (let y = 0; y <= sc.h; y++) { ctx.beginPath(); ctx.moveTo(-cx, y * 8 - cy + 0.5); ctx.lineTo(sc.w * 8 - cx, y * 8 - cy + 0.5); ctx.stroke(); }
+  const fb = feet(G.fred); ctx.strokeStyle = '#f0f'; ctx.strokeRect(fb.x - cx + 0.5, fb.y - cy + 0.5, fb.w - 1, fb.h - 1);
+  const s = 'x' + Math.floor((fb.x + 4) / 8) + ' y' + Math.floor((fb.y + 3) / 8) + ' ' + G.sid;
+  R(ctx, 0, 0, s.length * 6 + 4, 10, 3); text(ctx, s, 2, 1, 0);
+}
+
+/* =====================================================================
+   STORY SCRIPTS  (what happens when you press A on someone / something)
+   ===================================================================== */
+let D = DIALOGUE;
+const frameWaiters = []; const nextFrame = () => new Promise(r => frameWaiters.push(r));
+async function frames(n, fn) { for (let i = 0; i < n; i++) { if (fn) fn(i); await nextFrame(); } }
+async function byDay(day1, day2, key) { if (G.day === 1) await say(day1); else { await say(day2); G.seen[key] = true; } }
+async function endGame() { G.flags.ending = true; G.busy = true; await fadeOut(3, CONFIG.DREAM_FADE_MS); startCut('end'); }
+
+const SCRIPTS = {
+  async haile(a) {
+    if (G.sid === 'yard') { await say(D.yardHaile); return; }
+    const line = D.haileLines[(G.haileTurn = ((G.haileTurn ?? -1) + 1)) % D.haileLines.length];   // take turns, never the same twice in a row
+    if (line !== 'PAT') await say(line);
+    else { const c = await ask(D.hailePat, [D.yes, D.no]);
+      if (c === 0) { const d = a.dir; a.dir = 'down'; await frames(30, i => { a.offy = (i >> 2) & 1; }); a.offy = 0; await say(D.hailePatYes); a.dir = d; } }
+  },
+  async xiaoyi() { await say(D.xiaoyi); },
+  async max() {
+    const c = await ask(D.maxAsk, [D.maxYesPlease, D.maxNoThanks]);
+    if (c === 0) { await say(D.maxYes); if (CONFIG.ENABLE_PUZZLE_MINIGAME) await runPuzzle(); }
+    else await say(D.maxNo);
+  },
+  tv: () => byDay(D.tv1, D.tv2, 'tv'),
+  sofa: () => byDay(D.sofa1, D.sofa2, 'sofa'),
+  async water() { if (G.day === 2) return byDay(null, D.water2, 'water');
+    await say([D.water1]); const c = await ask(D.waterAsk, [D.yes, D.no]); if (c === 0) await say(D.waterYes); },
+  async wine() { await say(D.wine1); },
+  async stove() { await say(D.stove); },
+  async toGate() {   // Day 2: Fred slowly walks to the gate by himself
+    const f = G.fred, q1 = placeFromTile(15, 4), q2 = placeFromTile(1, 4), q3 = placeFromTile(1, 5);
+    f.auto = true;
+    for (const [tx, ty] of [[f.x, q1.y], [q2.x, q1.y], [q3.x, q3.y]]) while (f.x !== tx || f.y !== ty) {
+      const dx = Math.sign(tx - f.x), dy = Math.sign(ty - f.y); f.dir = dx > 0 ? 'right' : dx < 0 ? 'left' : dy < 0 ? 'up' : 'down';
+      f.x += dx * 0.5; f.y += dy * 0.5; await nextFrame(); }
+    f.auto = false; f.dir = 'left'; G.flags.atGate = true;
+    await SCRIPTS.gate();
+  },
+  async gate() { const c = await ask(D.gateAsk, [D.yes, D.no]); if (c === 0) await endGame(); },
+  async piano() {
+    const f = G.fred, keep = { x: f.x, y: f.y, dir: f.dir };
+    if (G.day === 2) {   // Day 2: Fred plays Eason's song alone
+      const c = await ask(D.pianoAsk2, [D.yes, D.no]); if (c !== 0) return;
+      await fadeOut(3); G.hideFred = true; G.pianoFred = true; await fadeIn();
+      await playPiano(EASON_RH, EASON_LH, EASON_16TH);
+      G.pianoDone = 'rest'; await sleep(500); await say(D.pianoDay2);
+      await fadeOut(3); G.pianoFred = false; G.pianoDone = false; G.hideFred = false; Object.assign(f, keep); await fadeIn(); return;
+    }
+    const c = await ask(D.pianoAsk, [D.yes, D.no]); if (c !== 0) return;
+    await fadeOut(3); G.hideFred = true; G.pianoFred = true; await fadeIn();
+    // Mary (Xiao Yi) comes in through the door and walks over to the piano while Fred plays
+    const q = placeFromTile(0, 13), m = { id: 'xiaoyi', kind: 'person', look: 'xiaoyi', x: q.x, y: q.y, dir: 'right', frame: 0, step: 0, offx: 0, offy: 0, walkAnim: true, talking: true };
+    G.actors.push(m);
+    const walk = (async () => { await frames(90);
+      const path = [[12 * 8 - 4, q.y], [12 * 8 - 4, 52 - 13 + 4]];   // across the room, then up beside the piano
+      for (const [tx, ty] of path) while (m.x !== tx || m.y !== ty) {
+        const dx = Math.sign(tx - m.x), dy = Math.sign(ty - m.y); m.dir = dx > 0 ? 'right' : dx < 0 ? 'left' : dy < 0 ? 'up' : 'down';
+        m.x += dx * 0.5; m.y += dy * 0.5; await nextFrame(); }
+      m.walkAnim = false; m.dir = 'left'; })();
+    await Promise.all([playPiano(), walk]);
+    G.pianoDone = 'right'; await sleep(600);   // hands back, Fred turns on the stool to face Mary
+    await say(D.pianoMary);
+    await fadeOut(3); G.actors = G.actors.filter(a => a !== m); G.pianoFred = false; G.pianoDone = false; G.hideFred = false; Object.assign(f, keep); await fadeIn();
+  },
+  food: () => byDay(D.food1, D.food2, 'food'),
+  async leash() {   // wall hook OR the desk next to the lamp
+    if (G.day === 2) { await say(D.leash2); G.seen.leash = true; return; }
+    await say(D.leash1);
+    const c = await ask(D.leashAsk, [D.yes, D.no]);
+    if (c === 0) { await fadeOut(3); await loadScene('street', 'start'); } else await say(D.leashNo);
+  },
+  async bed() {
+    if (G.day === 2) return;
+    const c = await ask(D.bedAsk, [D.yes, D.no]); if (c !== 0) return;
+    await fadeOut(3, CONFIG.DREAM_FADE_MS); await sleep(900);   // slow fade to black, straight into the dream
+    startCut('dream');
+  },
+  async toilet() {
+    if (G.day === 2) { await say(D.toilet); return; }
+    await say(D.toilet1); await fadeOut(3, 200); await sleep(1500); await fadeIn(200);
+    G.flags.dumped = true; G.flags.washed = false; G.flags.inSink = true;   // must walk away then past the sink
+  },
+  async wash() { await ask(D.washAsk, [D.yes], false); await say(D.washYes); G.flags.washed = true; },
+  async thrower() { await say(G.day === 1 ? D.thrower1 : D.thrower2); },
+  async daidai(a) { // "Pi gu!" + a little double hop
+    await say(D.daidai);
+    await frames(48, i => { a.offy = Math.round(Math.abs(Math.sin(i / 24 * Math.PI)) * 4); }); a.offy = 0;
+  },
+  async yang(a) { // "Da Pi gu!" + Yijun and Daidai jump up/down and wiggle left/right for 1 second
+    await say(D.yang); const d = G.actors.find(x => x.id === 'daidai');
+    await frames(60, i => { const hop = Math.round(Math.abs(Math.sin(i / 10 * Math.PI)) * 4), wig = ((i >> 3) & 1) ? 2 : -2;
+      a.offy = hop; d.offy = Math.round(Math.abs(Math.sin((i + 5) / 10 * Math.PI)) * 4); a.offx = wig; d.offx = -wig; });
+    a.offx = a.offy = d.offx = d.offy = 0;
+  },
+  async poo() {
+    const h = G.actors.find(a => a.follow === 'ahead'); h.stopped = true;
+    G.pooAt = { x: Math.round(h.x + (h.dir === 'right' ? -5 : 13)), y: Math.round(h.y + 10) };
+    await say([D.poo[0]]);
+    await ask(D.poo[1], [D.pooPick], false);      // one option only, cannot cancel
+    G.pooAt = null; await say(D.pooDone); h.stopped = false;
+  },
+  async streetPee() { await say(D.streetPee); },
+  async streetEnd() { await say(D.streetEnd); await fadeOut(3); await loadScene('livingroom', 'fromStreet'); },
+};
+
+/* =====================================================================
+   CUTSCENES
+   ===================================================================== */
+function startCut(name) { G.mode = 'cut'; G.cut = { name, t: 0, phase: 0, done: false }; ui = null; CUTS[name](); }
+const CUTS = {
+  async intro() { await fadeIn(); await sleep(700); await say(D.intro); await sleep(300); await fadeOut(3); G.day = 1; await loadScene('livingroom', 'start'); },
+  async dream() {
+    G.day = 2;                                  // the Day variable changes here
+    playBG();                                                                   // dream music starts
+    await fadeIn(CONFIG.DREAM_FADE_MS); await sleep(1500);
+    for (const line of D.dream) { await say([line]); await sleep(CONFIG.LINE_GAP_MS); }   // pause between lines so the scene can play
+    G.cut.phase = 1; G.cut.p1 = G.cut.t; await sleep(2600);                    // Haile runs off
+    G.cut.phase = 2; await frames(180, i => { const k = i / 179; G.cut.pan = Math.round(144 * (k * k * (3 - 2 * k))); });   // camera tilts up to the night sky
+    await frames(120, i => { G.cut.night = i / 119; });                         // the rest of the sky slowly turns fully dark
+    await sleep(600);
+    G.cut.star = G.cut.t; await sleep(CONFIG.STAR_HOLD_MS);                      // a new star appears and shines (held longer)
+    stopBG(CONFIG.MUSIC_FADE_S);                                               // music slowly gets quieter...
+    await fadeOut(0, CONFIG.DREAM_FADE_MS + 100);                              // ...while the screen fades to white
+    await sleep(Math.max(1200, CONFIG.MUSIC_FADE_S * 1000 - fadeSec(CONFIG.DREAM_FADE_MS + 100) * 1000));   // wait until the music is silent
+    musicPaused = false;
+    G.flags = {}; G.busy = false;
+    await loadScene('bedroom', 'wake', CONFIG.DREAM_FADE_MS);                  // wake up in bed, slow fade in
+  },
+  async end() { playBG(); await fadeIn(CONFIG.DREAM_FADE_MS); await sleep(2500);
+    for (const line of D.end) { await say([line]); await sleep(CONFIG.LINE_GAP_MS); }
+    await fadeOut(3, CONFIG.DREAM_FADE_MS); G.cut.portrait = true; await fadeIn(CONFIG.DREAM_FADE_MS + 150); G.cut.done = true; },
+};
+function cloud(g, x, y) { for (const [dx, dy, r] of [[0, 4, 5], [8, 0, 7], [17, 3, 6], [24, 5, 4]]) disc(g, x + dx, y + dy, r + 1, 1);
+  for (const [dx, dy, r] of [[0, 4, 5], [8, 0, 7], [17, 3, 6], [24, 5, 4]]) disc(g, x + dx, y + dy, r, 0); R(g, x - 5, y + 9, 34, 1, 1); }
+function drawIntro(t) {
+  R(ctx, 0, 0, W, H, 0);
+  disc(ctx, 134, 18, 11, 1); disc(ctx, 134, 18, 9, 0); disc(ctx, 134, 18, 7, 1);
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + t / 300, r0 = 13, r1 = 16 + ((t >> 5) & 1);
+    for (let r = r0; r <= r1; r++) R(ctx, Math.round(134 + Math.cos(a) * r), Math.round(18 + Math.sin(a) * r), 1, 1, 1); }
+  cloud(ctx, ((t * 0.15) % 220) - 40, 10); cloud(ctx, ((t * 0.1 + 120) % 220) - 40, 28);
+  const hx = 36; R(ctx, hx - 4, 30, 92, 4, 3); for (let y = 34; y < 42; y += 2) R(ctx, hx - 2, y, 88, 2, (y >> 1) & 1 ? 2 : 3);
+  R(ctx, hx, 42, 84, 46, 3); pat(ctx, hx + 1, 43, 82, 45, ['00000000', '11111111', '00010000', '00010000', '11111111', '00000001', '00000001', '11111111']);
+  for (const wx of [hx + 6, hx + 58]) { box(ctx, wx, 48, 18, 14, 1, 3); R(ctx, wx + 8, 48, 2, 14, 3); R(ctx, wx + 2, 50, 2, 3, 0); }
+  box(ctx, hx + 34, 58, 16, 30, 2, 3); R(ctx, hx + 35, 59, 14, 1, 1); R(ctx, hx + 46, 72, 1, 2, 0);
+  box(ctx, hx + 6, 68, 18, 12, 1, 3); R(ctx, hx + 8, 70, 2, 3, 0); box(ctx, hx + 58, 68, 18, 12, 1, 3); R(ctx, hx + 60, 70, 2, 3, 0);
+  R(ctx, 0, 88, W, 1, 3); pat(ctx, 0, 89, W, 11, TILES.p); R(ctx, 0, 100, W, 44, 2);
+  for (let x = 0; x < W; x += 6) R(ctx, x + ((x / 6) & 1) * 2, 102, 1, 2, 1);
+  const x = ((t * 0.35) % 220) - 30, fr = [1, 0, 2, 0][(t >> 3) & 3];
+  ctx.drawImage(SPR.daidai.right[fr], Math.round(x + 13), 77); ctx.drawImage(SPR.fred.right[fr], Math.round(x), 75);
+}
+const STARS = Array.from({ length: 46 }, (_, i) => { const h = n => { const v = Math.sin(i * 12.9898 + n * 78.233) * 43758.5453; return v - Math.floor(v); };
+  return [Math.floor(h(1) * 158), Math.floor(h(2) * 132), i % 5]; });
+const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+function drawNightSky(t, c, pan) {   // the sky above the dream meadow; screen rows 0 .. pan. Gets darker the higher you look.
+  for (let y = 0; y < pan; y++) { const d = pan - y, v = Math.min(3, 1 + d / 40 + (c.night || 0) * 3);   // 1 (just above meadow) -> 3 (deep sky)
+    const lo = Math.floor(v), frac = v - lo;
+    for (let x = 0; x < W; x++) R(ctx, x, y, 1, 1, lo < 3 && frac * 16 > BAYER[y & 3][x & 3] ? lo + 1 : lo); }
+  for (const [x, y, k] of STARS) { const sy = y - 144 + pan; if (sy < 0) continue; const d = pan - sy + (c.night || 0) * 120; if (d < 50) continue;
+    const tw = ((t >> 4) + k) % 5 === 0, fade = d < 70;   // stars fade in as the sky darkens
+    R(ctx, x, sy, 1, 1, tw || fade ? 1 : k < 2 ? 0 : 2); if (k === 0 && !tw && !fade) { R(ctx, x - 1, sy, 3, 1, 2); R(ctx, x, sy - 1, 1, 3, 2); R(ctx, x, sy, 1, 1, 0); } }
+  if (c.star != null) { const k = t - c.star, sx = 104, sy = 46;   // the new star: a spark that grows, flashes, then twinkles
+    const r = k < 40 ? Math.round(k / 8) : k < 70 ? 5 + ((k >> 2) & 1) * 3 : 4 + ((k >> 4) & 1);
+    if (k > 30 && k < 90) { const ring = Math.round((k - 30) / 3); for (let a = 0; a < 16; a++) R(ctx, Math.round(sx + Math.cos(a * Math.PI / 8) * ring), Math.round(sy + Math.sin(a * Math.PI / 8) * ring), 1, 1, k < 60 ? 1 : 2); }
+    R(ctx, sx - r, sy, r * 2 + 1, 1, 1); R(ctx, sx, sy - r, 1, r * 2 + 1, 1);
+    const d = Math.max(1, Math.round(r / 2)); for (let i = 1; i <= d; i++) { R(ctx, sx - i, sy - i, 1, 1, 2); R(ctx, sx + i, sy - i, 1, 1, 2); R(ctx, sx - i, sy + i, 1, 1, 2); R(ctx, sx + i, sy + i, 1, 1, 2); }
+    R(ctx, sx - 1, sy - 1, 3, 3, 0); R(ctx, sx, sy - 2, 1, 5, 0); R(ctx, sx - 2, sy, 5, 1, 0); }
+}
+function drawDream(t, c) {
+  const pan = c.pan || 0;
+  if (pan) { ctx.save(); ctx.translate(0, pan); }
+  R(ctx, 0, 0, W, H, 0);
+  const glow = c.phase ? Math.min(30, (t - c.p1) / 3) : 0;
+  for (let x = 0; x < W; x++) { const h = Math.round(4 + Math.sin(x / 13) * 2 + Math.sin(x / 5) * 1); R(ctx, x, 62 - h, 1, h, glow > 15 ? 0 : 1); }
+  R(ctx, 0, 62, W, 82, 1); R(ctx, 0, 62, W, 1, 2);
+  for (let i = 0; i < 26; i++) { const sy = 66 + ((i * 23) % 70), sp = 0.6 + (sy - 66) / 70 * 2.4, sx = ((i * 37 - t * sp) % 190 + 190) % 190 - 15;   // nearer (lower) grass moves faster
+    R(ctx, sx, sy, 1, 2, 2); R(ctx, sx + 2, sy - 1, 1, 3, 2); R(ctx, sx + 4, sy, 1, 2, 2); if (i % 4 === 0) R(ctx, sx + 2, sy - 3, 1, 1, 0); }
+  if (glow) for (let y = 0; y < glow; y++) R(ctx, 0, 62 - glow + y, W, 1, 0);
+  const fr = [1, 0, 2, 0][(t >> 2) & 3];
+  let hx = 92, hy = 80; if (c.phase) { const k = t - c.p1; hx += k * 1.4; hy -= k * 0.12; }
+  ctx.drawImage(SPR.fred.right[fr], 48, 78); ctx.drawImage(SPR.haile.right[fr], Math.round(hx), Math.round(hy));
+  if (pan) { ctx.restore(); darken(pan); drawNightSky(t, c, pan); } else darken(0);
+}
+function drawEnd(t, c) {
+  R(ctx, 0, 0, W, 22, 2); for (let y = 22; y < 28; y++) for (let x = 0; x < W; x++) R(ctx, x, y, 1, 1, (x + y) & 1 ? 2 : 1);
+  R(ctx, 0, 28, W, 18, 1); for (let y = 46; y < 54; y++) for (let x = 0; x < W; x++) R(ctx, x, y, 1, 1, (x + y) & 1 ? 1 : 0);
+  R(ctx, 0, 54, W, 50, 0);
+  disc(ctx, 112, 84, 17, 1); disc(ctx, 112, 84, 15, 0);
+  for (const [cx, cy] of [[30, 16], [96, 34]]) { R(ctx, cx, cy, 30, 2, 1); R(ctx, cx + 6, cy - 2, 16, 2, 1); }
+  const hill = x => Math.round(86 + Math.sin(x / 26) * 4 + Math.sin(x / 9) * 1.5);
+  for (let x = 0; x < W; x++) R(ctx, x, hill(x), 1, H - hill(x), 3);
+  if (c.portrait) { drawPortrait(c); return; }
+  const mx = Math.round(t * 0.5 - 20), fr = [1, 0, 2, 0][(t >> 3) & 3], dx = mx - 24;   // runs across ONCE (no looping)
+  if (dx > W + 4) return;
+  const my = hill(mx + 8) - 24, sw = Math.sin(t / 8 * Math.PI / 2) * 1.1, arms = [];   // arms swing back and forth
+  const line = (x0, y0, x1, y1) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) | 0;
+    for (let i = 0; i <= n; i++) R(ctx, Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), 2, 2, 3); };
+  for (const a of [sw, -sw]) {   // each arm is an "L": upper arm hangs from the shoulder, forearm bent 90 degrees forward
+    const sx = mx + 7, sy = my + 9, ex = sx + Math.sin(a) * 7, ey = sy + Math.cos(a) * 7;
+    arms.push(() => { line(sx, sy, ex, ey); line(ex, ey, ex + Math.cos(a) * 6, ey - Math.sin(a) * 6); }); }
+  ctx.drawImage(SPR.fredTall[fr], mx, my);                          // Fred runs in front...
+  arms.forEach(d => d());                                           // arms drawn over the body so the L shape shows
+  ctx.drawImage(SPR.haile.sil[fr], dx, hill(dx + 8) - 15);        // ...and Haile follows
+}
+function drawPortrait(c) {
+  R(ctx, 0, 0, W, H, 0); const im = IMG.portrait, pw = 60, ph = 90, px = 50, py = 8;
+  box(ctx, px - 4, py - 4, pw + 8, ph + 8, 1, 3); R(ctx, px - 2, py - 2, pw + 4, ph + 4, 3);
+  if (im) ctx.drawImage(im, px, py);
+  text(ctx, 'HAILE', 65, 108, 3);
+  if (c.done && (G.t >> 5) & 1) text(ctx, D.pressStart, Math.round((W - textWidth(D.pressStart)) / 2), 126, 2);
+}
+function drawCut() { const c = G.cut; if (c.name === 'intro') drawIntro(c.t); else if (c.name === 'dream') drawDream(c.t, c); else drawEnd(c.t, c); }
+
+/* ---------- title ---------- */
+function drawLang() {
+  R(ctx, 0, 0, W, H, 0); box(ctx, 4, 4, 152, 136, 0, 3); R(ctx, 6, 6, 148, 1, 1); R(ctx, 6, 137, 148, 1, 1);
+  text(ctx, 'HAILE', Math.round((W - (5 * 18 - 3)) / 2), 16, 3, 3);
+  text(ctx, 'Choose language', Math.round((W - textWidth('Choose language')) / 2), 50, 2);
+  text(ctx, '选择语言', Math.round((W - textWidth('选择语言')) / 2), 64, 2);
+  ['English', '中文'].forEach((o, i) => { const y = 88 + i * 18; box(ctx, 44, y - 4, 72, 16, G.langSel === i ? 1 : 0, 3);
+    text(ctx, o, Math.round((W - textWidth(o)) / 2), y, 3); if (G.langSel === i) text(ctx, '>', 50, y, 3); });
+  ctx.drawImage(SPR.haile.right[[1, 0, 2, 0][(G.t >> 3) & 3]], 72, 122);
+}
+function drawTitle() {
+  R(ctx, 0, 0, W, H, 0); box(ctx, 4, 4, 152, 136, 0, 3); R(ctx, 6, 6, 148, 1, 1); R(ctx, 6, 137, 148, 1, 1);
+  const t1 = D.title;
+  text(ctx, t1, Math.round((W - (t1.length * 18 - 3)) / 2), 26, 3, 3);
+  pat(ctx, 20, 92, 120, 6, TILES.g); R(ctx, 20, 91, 120, 1, 2);
+  ctx.drawImage(SPR.haile.right[[1, 0, 2, 0][(G.t >> 3) & 3]], 72, 76);
+  if ((G.t >> 5) & 1) { const s = D.pressStart; text(ctx, s, Math.round((W - textWidth(s)) / 2), 112); }
+}
+let starting = false;
+async function startGame() { if (starting) return; starting = true; initAudio(); sfx.select(); await fadeOut(3); G.day = 1; G.seen = {}; G.flags = {}; G.busy = false; G.puzzle = null; startCut('intro'); starting = false; }
+async function toTitle() { if (starting) return; starting = true; stopBG(0.5); await fadeOut(3); musicPaused = false; G.mode = 'title'; G.cut = null; G.day = 1; G.seen = {}; G.flags = {}; G.busy = false; await fadeIn(); starting = false; }
+
+/* =====================================================================
+   OPTIONAL: Max's 12-ball balance puzzle (CONFIG.ENABLE_PUZZLE_MINIGAME)
+   ===================================================================== */
+function runPuzzle() { return new Promise(res => { G.puzzle = { odd: Math.floor(Math.random() * 12), heavy: Math.random() < 0.5, place: Array(12).fill(0),
+  cur: 0, left: 3, tilt: 0, phase: 'weigh', msg: 'A: put ball on L / R / off', res }; }); }
+function updatePuzzle() {
+  const p = G.puzzle; if (hit.B) { G.puzzle = null; p.res(); return; }
+  if (p.phase === 'done') { if (hit.A) { G.puzzle = null; p.res(); } return; }
+  const n = p.phase === 'weigh' ? 13 : 12;
+  if (hit.left) { p.cur = (p.cur + n - 1) % n; sfx.move(); } if (hit.right) { p.cur = (p.cur + 1) % n; sfx.move(); }
+  if ((hit.up || hit.down) && p.cur < 12) { p.cur = (p.cur + 6) % 12; sfx.move(); }
+  if (!hit.A) return; sfx.select();
+  if (p.phase === 'guess') { const ok = p.cur === p.odd, w = p.heavy ? 'heavier' : 'lighter';
+    p.msg = ok ? 'Correct! Ball ' + (p.odd + 1) + ' is ' + w : 'Not quite: ball ' + (p.odd + 1) + ' (' + w + ')'; p.phase = 'done'; return; }
+  if (p.cur < 12) { p.place[p.cur] = (p.place[p.cur] + 1) % 3; return; }
+  const L = [], Rt = []; p.place.forEach((v, i) => v === 1 ? L.push(i) : v === 2 ? Rt.push(i) : 0);
+  if (!L.length || L.length !== Rt.length) { p.msg = 'Same number each side!'; return; }
+  const s = L.includes(p.odd) ? 1 : Rt.includes(p.odd) ? -1 : 0; p.tilt = p.heavy ? s : -s; p.left--;
+  p.msg = p.tilt === 0 ? 'It balances.' : p.tilt > 0 ? 'Left side is heavier.' : 'Right side is heavier.';
+  if (!p.left) { p.phase = 'guess'; p.cur = 0; p.msg += ' Pick the odd ball!'; }
+}
+function drawPuzzle() {
+  const p = G.puzzle; R(ctx, 0, 0, W, H, 0); box(ctx, 0, 0, W, H, 0, 3);
+  text(ctx, 'Weighings left: ' + p.left, 6, 4);
+  for (let i = 0; i < 12; i++) { const x = 8 + (i % 6) * 25, y = 16 + Math.floor(i / 6) * 22, sel = p.cur === i;
+    box(ctx, x, y, 20, 12, sel ? 1 : 0, 3); text(ctx, String(i + 1), x + (i < 9 ? 7 : 4), y + 2);
+    if (p.place[i]) text(ctx, p.place[i] === 1 ? 'L' : 'R', x + 7, y + 13, 2); }
+  const t = p.tilt * 5; R(ctx, 79, 70, 2, 24, 3); R(ctx, 70, 93, 20, 3, 3);
+  for (let i = -30; i <= 30; i++) R(ctx, 80 + i, 70 - Math.round(t * i / 30), 1, 2, 3);
+  const nL = p.place.filter(v => v === 1).length, nR = p.place.filter(v => v === 2).length;
+  for (const [sx, n, dy] of [[50, nL, t], [110, nR, -t]]) { R(ctx, sx, 71 + dy, 1, 8, 3); R(ctx, sx - 10, 79 + dy, 21, 2, 3);
+    for (let k = 0; k < n; k++) R(ctx, sx - 9 + (k % 6) * 3, 76 + dy - Math.floor(k / 6) * 3, 2, 2, 2); text(ctx, sx < 80 ? 'L' : 'R', sx - 2, 83 + dy, 2); }
+  if (p.phase === 'weigh') { box(ctx, 112, 96, 42, 12, p.cur === 12 ? 1 : 0, 3); text(ctx, 'WEIGH', 118, 98); }
+  wrap(p.msg, 25).forEach((l, i) => text(ctx, l, 6, 112 + i * 10));
+}
+
+/* =====================================================================
+   MAIN LOOP, LOADING, SCREEN SIZE, TOUCH BUTTONS
+   ===================================================================== */
+function step() {
+  G.t++;
+  if (hit.debug) debug = !debug;
+  if (hit.mute) muted = !muted;
+  if (G.mode === 'lang') {   // first screen: choose English or Chinese
+    if (hit.up || hit.down) { G.langSel ^= 1; sfx.move(); }
+    if ((hit.A || hit.start) && !G.fade) { initAudio(); sfx.select(); LANG = G.langSel ? 'zh' : 'en'; D = DIALOGUE = DIALOGUES[LANG]; G.mode = 'title'; }
+  }
+  else if (G.mode === 'title') { if ((hit.start || hit.A) && !G.fade) startGame(); else if (hit.B) G.mode = 'lang'; }
+  else if (G.mode === 'map') { if (G.puzzle) updatePuzzle(); else if (ui) updateUI(); updateMap(); }
+  else if (G.mode === 'cut') { G.cut.t++; if (ui) updateUI(); else if (G.cut.done && (hit.start || hit.A)) toTitle(); }
+  for (const k in hit) delete hit[k];
+  frameWaiters.splice(0).forEach(r => r());
+}
+function render() {
+  if (G.mode === 'lang') drawLang(); else if (G.mode === 'title') drawTitle(); else if (G.mode === 'map') { drawMap(); if (G.puzzle) drawPuzzle(); } else if (G.mode === 'cut') drawCut();
+  drawUI(); applyFade(); drawOverlay();
+}
+const ov = document.getElementById('ov'), octx = ov.getContext('2d');
+/* Chinese characters stay PIXELATED: each one is a 24x24 grid of square pixels (twice the detail of the
+   game's own pixels), made by drawing the character large and averaging it down, so strokes stay clear. */
+const CJK2 = {}, CJK_N = 24;
+function cjkPixels(ch) {
+  if (CJK2[ch]) return CJK2[ch];
+  const big = 192, c = mkCanvas(big, big), g = c.getContext('2d');
+  g.font = '500 ' + (big * 0.92) + 'px "PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Noto Sans CJK SC",sans-serif';
+  g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillText(ch, big / 2, big / 2 + big * 0.04);
+  const d = g.getImageData(0, 0, big, big).data, cell = big / CJK_N, on = [];
+  for (let y = 0; y < CJK_N; y++) for (let x = 0; x < CJK_N; x++) { let sum = 0;
+    for (let j = 0; j < cell; j++) for (let i = 0; i < cell; i++) sum += d[((y * cell + j) * big + x * cell + i) * 4 + 3];
+    if (sum / (cell * cell * 255) > 0.3) on.push(y * CJK_N + x); }
+  return (CJK2[ch] = on);
+}
+function drawOverlay() {
+  octx.clearRect(0, 0, ov.width, ov.height);
+  ov.style.opacity = G.fade ? String(Math.max(0, 1 - G.fade / 2)) : '1';   // fades together with the screen
+  for (const [ch, x, y, c, sc] of OVQ) {
+    const p = OVS * sc / 2;   // size of one character pixel on the overlay
+    octx.fillStyle = PAL[c];
+    for (const i of cjkPixels(ch)) octx.fillRect(Math.round(x * OVS + (i % CJK_N) * p), Math.round(y * OVS + Math.floor(i / CJK_N) * p), Math.ceil(p), Math.ceil(p)); }
+  OVQ.length = 0;
+}
+function placeOverlay() {   // keep the sharp text layer exactly over the game screen (inside its 4px border)
+  const r = cv.getBoundingClientRect();
+  Object.assign(ov.style, { left: (r.left + 4) + 'px', top: (r.top + 4) + 'px', width: (r.width - 8) + 'px', height: (r.height - 8) + 'px' });
+}
+let lastT = 0, acc = 0;
+function loop(now) { if (!lastT) lastT = now; acc += Math.min(100, now - lastT); lastT = now;
+  while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; } render(); requestAnimationFrame(loop); }
+
+function placeholder(name, w, h) { const c = mkCanvas(w, h), g = c.getContext('2d'); pat(g, 0, 0, w, h, ['00110011', '00110011', '11001100', '11001100', '00110011', '00110011', '11001100', '11001100']);
+  text(g, 'MISSING', 4, 4); text(g, name, 4, 14); return c; }
+function loadImages() {
+  return Promise.all(Object.entries(IMAGES).map(([k, src]) => new Promise(res => {
+    const sc = Object.values(SCENES).find(s => s.image === k); const im = new Image();
+    im.onload = () => { IMG[k] = im; res(); }; im.onerror = () => { IMG[k] = placeholder(k + '.png', sc.w * 8, sc.h * 8); res(); };
+    if (src.startsWith('%%')) src = k + '.png'; im.src = src; })));
+}
+function resize() {
+  const touch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+  const land = touch && innerWidth > innerHeight;
+  document.body.classList.toggle('touch', touch); document.body.classList.toggle('land', land);
+  const s = land ? Math.max(1, Math.min((innerWidth - 2 * 185) / W, (innerHeight - 10) / H))      // landscape: use all the space between the controls
+                 : Math.max(1, Math.floor(Math.min(innerWidth / W, (innerHeight - (touch ? 200 : 16)) / H)));
+  cv.style.width = W * s + 'px'; cv.style.height = H * s + 'px';
+  requestAnimationFrame(placeOverlay);
+}
+document.querySelectorAll('[data-k]').forEach(b => { const k = b.dataset.k;
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture?.(e.pointerId); press(k); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, e => { e.preventDefault(); release(k); });
+  b.addEventListener('contextmenu', e => e.preventDefault()); });
+addEventListener('resize', resize); addEventListener('orientationchange', () => setTimeout(resize, 200));
+(async function boot() {
+  resize(); buildSprites(); IMG.yard = drawYard(); IMG.street = drawStreet(); await loadImages();
+  await new Promise(r => { const im = new Image(); im.onload = () => { IMG.portrait = im; r(); }; im.onerror = r; im.src = PORTRAIT; });
+  requestAnimationFrame(loop);
+})();
+
+</script>
+</body></html>

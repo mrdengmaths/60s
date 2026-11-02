@@ -23,9 +23,9 @@
     {
       "slug": "new-app",
       "kind": "play",
-      "title": "新小程序",
-      "summary": "一个新的网页小程序（内容待补充）。",
-      "tags": ["小程序"],
+      "title": "Haile",
+      "summary": "纪念小姨家的小狗的一个小游戏。",
+      "tags": ["游戏", "纪念"],
       "url": "/new-app.html"
     }
   ]
